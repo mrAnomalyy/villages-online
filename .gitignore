@@ -1,0 +1,15 @@
+node_modules
+.next
+dist
+coverage
+playwright-report
+test-results
+.turbo
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+.env
+.DS_Store
+

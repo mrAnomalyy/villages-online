@@ -1,0 +1,104 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: villages
+      POSTGRES_PASSWORD: villages
+      POSTGRES_DB: villages
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U villages -d villages"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgresql://villages:villages@postgres:5432/villages
+      REDIS_URL: redis://redis:6379
+      REALM_DIRECTORY_JSON: >
+        [{"id":"alpha","name":"Alpha Realm","httpUrl":"http://realm-alpha:4101","wsUrl":"ws://realm-alpha:4101/ws"},{"id":"beta","name":"Beta Realm","httpUrl":"http://realm-beta:4102","wsUrl":"ws://realm-beta:4102/ws"}]
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  realm-alpha:
+    build:
+      context: .
+      dockerfile: services/realm/Dockerfile
+    environment:
+      PORT: 4101
+      REALM_ID: alpha
+      REALM_NAME: Alpha Realm
+      GATEWAY_URL: http://gateway:4000
+      DATABASE_URL: postgresql://villages:villages@postgres:5432/villages
+      REDIS_URL: redis://redis:6379
+      TEST_MODE: "true"
+    ports:
+      - "4101:4101"
+    depends_on:
+      gateway:
+        condition: service_started
+
+  realm-beta:
+    build:
+      context: .
+      dockerfile: services/realm/Dockerfile
+    environment:
+      PORT: 4102
+      REALM_ID: beta
+      REALM_NAME: Beta Realm
+      GATEWAY_URL: http://gateway:4000
+      DATABASE_URL: postgresql://villages:villages@postgres:5432/villages
+      REDIS_URL: redis://redis:6379
+      TEST_MODE: "true"
+    ports:
+      - "4102:4102"
+    depends_on:
+      gateway:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_GATEWAY_URL: http://127.0.0.1:4000
+      INTERNAL_GATEWAY_URL: http://gateway:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      gateway:
+        condition: service_started
+      realm-alpha:
+        condition: service_started
+      realm-beta:
+        condition: service_started
+
+volumes:
+  postgres-data:
+

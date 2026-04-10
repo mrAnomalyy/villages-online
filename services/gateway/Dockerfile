@@ -10,5 +10,4 @@ COPY services/gateway ./services/gateway
 RUN yarn install
 RUN yarn workspace gateway build
 
-CMD ["node", "services/gateway/dist/index.js"]
-
+CMD ["yarn", "workspace", "gateway", "start:tsx"]

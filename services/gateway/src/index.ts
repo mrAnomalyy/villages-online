@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import express from "express";
 import cors from "cors";
 import Redis from "ioredis";
@@ -51,18 +52,21 @@ app.get("/realms", (_req, res) => {
 app.post("/auth/guest", async (req, res) => {
   const parsed = authSchema.safeParse(req.body satisfies GuestAuthRequest);
   if (!parsed.success) {
-    return res.status(400).json({ message: parsed.error.flatten() });
+    res.status(400).json({ message: parsed.error.flatten() });
+    return;
   }
 
   try {
     const guest = await registerOrResumeGuest(pool, parsed.data.nickname, parsed.data.existingToken);
     await redis.set(`session:${guest.playerId}`, guest.token, "EX", 60 * 60 * 24 * 14);
     const payload: GuestAuthResponse = guest;
-    return res.json(payload);
+    res.json(payload);
+    return;
   } catch (error) {
-    return res.status(401).json({
+    res.status(401).json({
       message: error instanceof Error ? error.message : "Unable to register guest"
     });
+    return;
   }
 });
 
@@ -71,12 +75,14 @@ app.get("/realms/:realmId/character", async (req, res) => {
   const playerId = req.header("x-player-id");
   const token = req.header("x-player-token");
   if (!playerId || !token) {
-    return res.status(401).json({ message: "Missing auth headers." });
+    res.status(401).json({ message: "Missing auth headers." });
+    return;
   }
 
   const sessionToken = await redis.get(`session:${playerId}`);
   if (sessionToken !== token) {
-    return res.status(401).json({ message: "Session not found." });
+    res.status(401).json({ message: "Session not found." });
+    return;
   }
 
   const result = await pool.query(
@@ -87,10 +93,11 @@ app.get("/realms/:realmId/character", async (req, res) => {
   );
 
   if (result.rowCount === 0) {
-    return res.json(null);
+    res.json(null);
+    return;
   }
 
-  return res.json({
+  res.json({
     id: result.rows[0].id,
     playerId: result.rows[0].player_id,
     realmId: result.rows[0].realm_id,
@@ -102,6 +109,7 @@ app.get("/realms/:realmId/character", async (req, res) => {
       z: Number(result.rows[0].position_z)
     }
   });
+  return;
 });
 
 app.post("/realms/:realmId/characters", async (req, res) => {
@@ -109,22 +117,26 @@ app.post("/realms/:realmId/characters", async (req, res) => {
   const playerId = req.header("x-player-id");
   const token = req.header("x-player-token");
   if (!playerId || !token) {
-    return res.status(401).json({ message: "Missing auth headers." });
+    res.status(401).json({ message: "Missing auth headers." });
+    return;
   }
 
   const sessionToken = await redis.get(`session:${playerId}`);
   if (sessionToken !== token) {
-    return res.status(401).json({ message: "Session not found." });
+    res.status(401).json({ message: "Session not found." });
+    return;
   }
 
   const parsed = createCharacterSchema.safeParse(req.body satisfies CreateCharacterRequest);
   if (!parsed.success) {
-    return res.status(400).json({ message: parsed.error.flatten() });
+    res.status(400).json({ message: parsed.error.flatten() });
+    return;
   }
 
   const player = await pool.query<{ nickname: string }>("SELECT nickname FROM players WHERE id = $1", [playerId]);
   if (player.rowCount === 0) {
-    return res.status(404).json({ message: "Player not found." });
+    res.status(404).json({ message: "Player not found." });
+    return;
   }
 
   const created = await pool.query(
@@ -137,7 +149,7 @@ app.post("/realms/:realmId/characters", async (req, res) => {
     [crypto.randomUUID(), playerId, realmId, player.rows[0].nickname, parsed.data.bodyType]
   );
 
-  return res.status(201).json({
+  res.status(201).json({
     id: created.rows[0].id,
     playerId: created.rows[0].player_id,
     realmId: created.rows[0].realm_id,
@@ -149,6 +161,7 @@ app.post("/realms/:realmId/characters", async (req, res) => {
       z: Number(created.rows[0].position_z)
     }
   });
+  return;
 });
 
 app.post("/realms/:realmId/join", async (req, res) => {
@@ -156,17 +169,20 @@ app.post("/realms/:realmId/join", async (req, res) => {
   const playerId = req.header("x-player-id");
   const token = req.header("x-player-token");
   if (!playerId || !token) {
-    return res.status(401).json({ message: "Missing auth headers." });
+    res.status(401).json({ message: "Missing auth headers." });
+    return;
   }
 
   const realm = getRealmById(realmId);
   if (!realm) {
-    return res.status(404).json({ message: "Realm not found." });
+    res.status(404).json({ message: "Realm not found." });
+    return;
   }
 
   const sessionToken = await redis.get(`session:${playerId}`);
   if (sessionToken !== token) {
-    return res.status(401).json({ message: "Session not found." });
+    res.status(401).json({ message: "Session not found." });
+    return;
   }
 
   const character = await pool.query<{ id: string }>(
@@ -174,7 +190,8 @@ app.post("/realms/:realmId/join", async (req, res) => {
     [playerId, realmId]
   );
   if (character.rowCount === 0) {
-    return res.status(400).json({ message: "Character not created yet." });
+    res.status(400).json({ message: "Character not created yet." });
+    return;
   }
 
   const ticket = makeTicket();
@@ -195,7 +212,8 @@ app.post("/realms/:realmId/join", async (req, res) => {
     playerId,
     characterId: character.rows[0].id
   };
-  return res.json(response);
+  res.json(response);
+  return;
 });
 
 async function start(): Promise<void> {

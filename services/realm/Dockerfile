@@ -10,5 +10,4 @@ COPY services/realm ./services/realm
 RUN yarn install
 RUN yarn workspace realm build
 
-CMD ["node", "services/realm/dist/index.js"]
-
+CMD ["yarn", "workspace", "realm", "start:tsx"]

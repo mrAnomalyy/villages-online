@@ -1,0 +1,243 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1726;
+  --panel: rgba(10, 18, 31, 0.88);
+  --panel-strong: rgba(17, 28, 47, 0.96);
+  --accent: #c38f3f;
+  --accent-soft: #f1cd7b;
+  --text: #f7f2e8;
+  --muted: #b8b0a0;
+  --danger: #f08a8a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(195, 143, 63, 0.18), transparent 30%),
+    linear-gradient(180deg, #132034 0%, #0a101b 100%);
+  color: var(--text);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.page-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  width: min(1080px, 100%);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.menu-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 420px) 1fr;
+}
+
+.menu-copy {
+  padding: 40px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent),
+    var(--panel-strong);
+}
+
+.menu-copy h1 {
+  margin: 0 0 12px;
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+  line-height: 0.95;
+}
+
+.menu-copy p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.menu-form {
+  padding: 40px;
+  display: grid;
+  gap: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  color: var(--accent-soft);
+}
+
+.field input,
+.field select {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.primary-button,
+.secondary-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.primary-button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  color: #251607;
+  font-weight: 700;
+}
+
+.secondary-button {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.primary-button:hover,
+.secondary-button:hover {
+  transform: translateY(-1px);
+}
+
+.token-box,
+.error-box,
+.status-box {
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+.token-box,
+.status-box {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.error-box {
+  background: rgba(150, 23, 23, 0.26);
+  border: 1px solid rgba(240, 138, 138, 0.35);
+  color: var(--danger);
+}
+
+.character-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.character-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.character-card[data-selected="true"] {
+  outline: 2px solid var(--accent);
+  background: rgba(195, 143, 63, 0.14);
+}
+
+.loading-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.loading-card,
+.hud {
+  width: min(640px, 100%);
+  background: rgba(6, 11, 20, 0.8);
+  padding: 24px;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.loading-bar {
+  margin-top: 16px;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.loading-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-soft));
+}
+
+.game-layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.hud {
+  margin: 16px;
+  width: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hud small {
+  color: var(--muted);
+}
+
+.canvas-shell {
+  position: relative;
+  margin: 0 16px 16px;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.canvas-shell canvas {
+  width: 100%;
+  height: calc(100vh - 160px);
+  display: block;
+}
+
+@media (max-width: 860px) {
+  .menu-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-copy,
+  .menu-form {
+    padding: 24px;
+  }
+}
+

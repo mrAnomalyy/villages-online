@@ -36,7 +36,7 @@ services:
       DATABASE_URL: postgresql://villages:villages@postgres:5432/villages
       REDIS_URL: redis://redis:6379
       REALM_DIRECTORY_JSON: >
-        [{"id":"alpha","name":"Alpha Realm","httpUrl":"http://realm-alpha:4101","wsUrl":"ws://realm-alpha:4101/ws"},{"id":"beta","name":"Beta Realm","httpUrl":"http://realm-beta:4102","wsUrl":"ws://realm-beta:4102/ws"}]
+        [{"id":"alpha","name":"Alpha Realm","httpUrl":"http://127.0.0.1:4101","wsUrl":"ws://127.0.0.1:4101/ws"},{"id":"beta","name":"Beta Realm","httpUrl":"http://127.0.0.1:4102","wsUrl":"ws://127.0.0.1:4102/ws"}]
     ports:
       - "4000:4000"
     depends_on:
@@ -87,10 +87,9 @@ services:
       dockerfile: apps/web/Dockerfile
     environment:
       PORT: 3000
-      NEXT_PUBLIC_GATEWAY_URL: http://127.0.0.1:4000
       INTERNAL_GATEWAY_URL: http://gateway:4000
     ports:
-      - "3000:3000"
+      - "38080:3000"
     depends_on:
       gateway:
         condition: service_started
@@ -101,4 +100,3 @@ services:
 
 volumes:
   postgres-data:
-

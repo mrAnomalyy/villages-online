@@ -1,0 +1,12 @@
+.git
+.next
+node_modules
+dist
+coverage
+playwright-report
+test-results
+.turbo
+.yarn/cache
+.yarn/unplugged
+.yarn/install-state.gz
+

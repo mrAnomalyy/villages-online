@@ -31,7 +31,7 @@ export function toSnapshot(entity: PlayerEntity | NpcEntity): EntitySnapshot {
       bodyType: entity.bodyType,
       position: entity.position,
       velocityY: entity.velocityY,
-      chunkId: ""
+      chunkId: "",
     };
   }
 
@@ -41,7 +41,6 @@ export function toSnapshot(entity: PlayerEntity | NpcEntity): EntitySnapshot {
     label: entity.label,
     position: entity.position,
     velocityY: entity.velocityY,
-    chunkId: ""
+    chunkId: "",
   };
 }
-

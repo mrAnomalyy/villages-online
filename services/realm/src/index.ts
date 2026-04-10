@@ -7,7 +7,7 @@ import {
   TICK_RATE,
   type ClientSocketMessage,
   type InitialWorldPayload,
-  type ServerSocketMessage
+  type ServerSocketMessage,
 } from "@villages/shared";
 import { getInitialChunks, getNeighborChunks, TEST_MAP_ID } from "@villages/world";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
@@ -17,7 +17,8 @@ const port = Number(process.env.PORT ?? 4101);
 const realmId = process.env.REALM_ID ?? "alpha";
 const realmName = process.env.REALM_NAME ?? "Alpha Realm";
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
-const databaseUrl = process.env.DATABASE_URL ?? "postgresql://villages:villages@127.0.0.1:5432/villages";
+const databaseUrl =
+  process.env.DATABASE_URL ?? "postgresql://villages:villages@127.0.0.1:5432/villages";
 
 const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
 const pool = new Pool({ connectionString: databaseUrl });
@@ -37,7 +38,7 @@ app.get("/ready", async (_req, res) => {
   } catch (error) {
     res.status(503).json({
       ok: false,
-      error: error instanceof Error ? error.message : "Unknown readiness error"
+      error: error instanceof Error ? error.message : "Unknown readiness error",
     });
   }
 });
@@ -50,35 +51,37 @@ const sockets = new Map<string, WebSocket>();
 const visibleNpcs = [
   createNpc(`${realmId}-npc-guide`, "Guide", [
     { x: 6, y: 1, z: 6 },
-    { x: 10, y: 1, z: 6 }
+    { x: 10, y: 1, z: 6 },
   ]),
   createNpc(`${realmId}-npc-watcher`, "Watcher", [
     { x: 18, y: 1, z: 8 },
-    { x: 22, y: 1, z: 12 }
-  ])
+    { x: 22, y: 1, z: 12 },
+  ]),
 ];
+
+function asPlayerSnapshot(player: PlayerEntity) {
+  return withChunk({
+    id: player.id,
+    kind: "player" as const,
+    label: player.label,
+    bodyType: player.bodyType,
+    position: player.position,
+    velocityY: player.velocityY,
+  });
+}
 
 function broadcastSnapshots(): void {
   const entities = [
-    ...Array.from(players.values()).map((player) =>
-      withChunk({
-        id: player.id,
-        kind: "player" as const,
-        label: player.label,
-        bodyType: player.bodyType,
-        position: player.position,
-        velocityY: player.velocityY
-      })
-    ),
+    ...Array.from(players.values()).map(asPlayerSnapshot),
     ...visibleNpcs.map((npc) =>
       withChunk({
         id: npc.id,
         kind: "npc" as const,
         label: npc.label,
         position: npc.position,
-        velocityY: npc.velocityY
+        velocityY: npc.velocityY,
       })
-    )
+    ),
   ];
 
   for (const [characterId, socket] of sockets.entries()) {
@@ -92,7 +95,7 @@ function broadcastSnapshots(): void {
     const payload: ServerSocketMessage = {
       type: "snapshot",
       self,
-      entities: entities.filter((entity) => entity.id !== characterId)
+      entities: entities.filter((entity) => entity.id !== characterId),
     };
     socket.send(JSON.stringify(payload));
   }
@@ -119,10 +122,10 @@ async function loadCharacter(characterId: string): Promise<PlayerEntity | null> 
     position: {
       x: Number(row.position_x),
       y: Number(row.position_y),
-      z: Number(row.position_z)
+      z: Number(row.position_z),
     },
     velocityY: Number(row.velocity_y),
-    direction: { x: 0, z: 0 }
+    direction: { x: 0, z: 0 },
   };
 }
 
@@ -131,7 +134,13 @@ async function persistCharacter(character: PlayerEntity): Promise<void> {
     `UPDATE characters
      SET position_x = $1, position_y = $2, position_z = $3, velocity_y = $4, updated_at = NOW()
      WHERE id = $5`,
-    [character.position.x, character.position.y, character.position.z, character.velocityY, character.id]
+    [
+      character.position.x,
+      character.position.y,
+      character.position.z,
+      character.velocityY,
+      character.id,
+    ]
   );
 }
 
@@ -143,7 +152,12 @@ wss.on("connection", (socket) => {
     if (message.type === "hello") {
       const joinValue = await redis.get(`join:${message.ticket}`);
       if (!joinValue) {
-        socket.send(JSON.stringify({ type: "error", message: "Join ticket expired." } satisfies ServerSocketMessage));
+        socket.send(
+          JSON.stringify({
+            type: "error",
+            message: "Join ticket expired.",
+          } satisfies ServerSocketMessage)
+        );
         socket.close();
         return;
       }
@@ -154,14 +168,24 @@ wss.on("connection", (socket) => {
         characterId: string;
       };
       if (join.realmId !== realmId) {
-        socket.send(JSON.stringify({ type: "error", message: "Ticket is for another realm." } satisfies ServerSocketMessage));
+        socket.send(
+          JSON.stringify({
+            type: "error",
+            message: "Ticket is for another realm.",
+          } satisfies ServerSocketMessage)
+        );
         socket.close();
         return;
       }
 
       const player = await loadCharacter(join.characterId);
       if (!player) {
-        socket.send(JSON.stringify({ type: "error", message: "Character not found." } satisfies ServerSocketMessage));
+        socket.send(
+          JSON.stringify({
+            type: "error",
+            message: "Character not found.",
+          } satisfies ServerSocketMessage)
+        );
         socket.close();
         return;
       }
@@ -177,39 +201,25 @@ wss.on("connection", (socket) => {
         characterId: player.id,
         mapId: TEST_MAP_ID,
         chunks: getInitialChunks(),
-        player: withChunk({
-          id: player.id,
-          kind: "player",
-          label: player.label,
-          bodyType: player.bodyType,
-          position: player.position,
-          velocityY: player.velocityY
-        }),
+        player: asPlayerSnapshot(player),
         entities: [
           ...Array.from(players.values())
             .filter((otherPlayer) => otherPlayer.id !== player.id)
-            .map((otherPlayer) =>
-              withChunk({
-                id: otherPlayer.id,
-                kind: "player",
-                label: otherPlayer.label,
-                bodyType: otherPlayer.bodyType,
-                position: otherPlayer.position,
-                velocityY: otherPlayer.velocityY
-              })
-            ),
+            .map(asPlayerSnapshot),
           ...visibleNpcs.map((npc) =>
             withChunk({
               id: npc.id,
               kind: "npc",
               label: npc.label,
               position: npc.position,
-              velocityY: npc.velocityY
+              velocityY: npc.velocityY,
             })
-          )
-        ]
+          ),
+        ],
       };
-      socket.send(JSON.stringify({ type: "welcome", payload: initial } satisfies ServerSocketMessage));
+      socket.send(
+        JSON.stringify({ type: "welcome", payload: initial } satisfies ServerSocketMessage)
+      );
       return;
     }
 

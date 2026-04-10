@@ -7,13 +7,20 @@ import type {
   GuestAuthResponse,
   InitialWorldPayload,
   RealmDescriptor,
-  ServerSocketMessage
+  ServerSocketMessage,
 } from "@villages/shared";
 import { CHUNK_SIZE, type EntitySnapshot } from "@villages/shared";
-import { createCharacter, fetchCharacter, fetchRealms, guestAuth, requestJoinTicket } from "../lib/api";
+import {
+  createCharacter,
+  fetchCharacter,
+  fetchRealms,
+  guestAuth,
+  requestJoinTicket,
+} from "../lib/api";
 import { BabylonGameCanvas } from "./scene-canvas";
 
 type Stage = "menu" | "character" | "loading" | "game";
+type Direction = { x: number; z: number };
 
 type SessionState = GuestAuthResponse & {
   realm: RealmDescriptor;
@@ -32,11 +39,14 @@ declare global {
   interface Window {
     __VILLAGES_TEST_STATE__?: DebugState;
     __VILLAGES_TEST_CONTROLS__?: {
-      move: (direction: { x: number; z: number }) => void;
+      move: (direction: Direction) => void;
       jump: () => void;
     };
   }
 }
+
+const MOVE_MESSAGE_TYPE = "move";
+const SELECTABLE_BODY_TYPES: CharacterBodyType[] = ["male", "female"];
 
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
@@ -99,7 +109,7 @@ export function GameShell() {
       loadingComplete: stage === "game",
       playerPosition: world?.player.position ?? null,
       loadedChunkIds,
-      visibleEntityIds: entities.map((entity) => entity.id)
+      visibleEntityIds: entities.map((entity) => entity.id),
     };
   }, [entities, loadedChunkIds, session, stage, world]);
 
@@ -108,10 +118,10 @@ export function GameShell() {
       move: (direction) => {
         socketRef.current?.send(
           JSON.stringify({
-            type: "move",
+            type: MOVE_MESSAGE_TYPE,
             sequence: Date.now(),
             direction,
-            running: true
+            running: true,
           })
         );
       },
@@ -119,10 +129,10 @@ export function GameShell() {
         socketRef.current?.send(
           JSON.stringify({
             type: "jump",
-            sequence: Date.now()
+            sequence: Date.now(),
           })
         );
-      }
+      },
     };
 
     return () => {
@@ -149,13 +159,13 @@ export function GameShell() {
     }
     setSession({
       ...auth,
-      realm: selectedRealm
+      realm: selectedRealm,
     });
 
     const existingCharacter = await fetchCharacter(selectedRealm.id, auth.playerId, auth.token);
     if (existingCharacter) {
       setCharacter(existingCharacter);
-      await beginJoin(selectedRealm, auth, existingCharacter);
+      await beginJoin(selectedRealm, auth);
       return;
     }
 
@@ -164,14 +174,14 @@ export function GameShell() {
     setStatus("Shape your first hero.");
   }
 
-  async function beginJoin(realm: RealmDescriptor, auth: GuestAuthResponse, activeCharacter: CharacterSummary) {
+  async function beginJoin(realm: RealmDescriptor, auth: GuestAuthResponse) {
     setStage("loading");
     setLoadingProgress(10);
     setStatus("Gathering realm ticket and world state...");
 
     const [joinTicket] = await Promise.all([
       requestJoinTicket(realm.id, auth.playerId, auth.token),
-      wait(450)
+      wait(450),
     ]);
 
     setLoadingProgress(45);
@@ -209,7 +219,7 @@ export function GameShell() {
             current
               ? {
                   ...current,
-                  player: message.self
+                  player: message.self,
                 }
               : current
           );
@@ -227,7 +237,7 @@ export function GameShell() {
             current
               ? {
                   ...current,
-                  chunks: message.chunks
+                  chunks: message.chunks,
                 }
               : current
           );
@@ -262,7 +272,12 @@ export function GameShell() {
     try {
       setError(null);
       setStatus("Forging your character...");
-      const created = await createCharacter(session.realm.id, session.playerId, session.token, selectedBodyType);
+      const created = await createCharacter(
+        session.realm.id,
+        session.playerId,
+        session.token,
+        selectedBodyType
+      );
       setCharacter(created);
       await beginJoin(session.realm, session, created);
     } catch (reason) {
@@ -270,7 +285,7 @@ export function GameShell() {
     }
   }
 
-  function handleMove(direction: { x: number; z: number }) {
+  function handleMove(direction: Direction) {
     window.__VILLAGES_TEST_CONTROLS__?.move(direction);
   }
 
@@ -305,8 +320,8 @@ export function GameShell() {
           </div>
           <div>
             <small>
-              Player position: {world.player.position.x.toFixed(2)}, {world.player.position.y.toFixed(2)},{" "}
-              {world.player.position.z.toFixed(2)}
+              Player position: {world.player.position.x.toFixed(2)},{" "}
+              {world.player.position.y.toFixed(2)}, {world.player.position.z.toFixed(2)}
             </small>
           </div>
           {issuedToken ? (
@@ -334,8 +349,8 @@ export function GameShell() {
           <aside className="menu-copy">
             <h1>Villages Online</h1>
             <p>
-              A browser MMO foundation with isolated realms, browser-bound guest identities, and a deterministic
-              starter world.
+              A browser MMO foundation with isolated realms, browser-bound guest identities, and a
+              deterministic starter world.
             </p>
             <p>{status}</p>
           </aside>
@@ -375,7 +390,11 @@ export function GameShell() {
                 ) : null}
                 {error ? <div className="error-box">{error}</div> : null}
                 <div className="actions">
-                  <button className="primary-button" data-testid="connect-button" onClick={handleConnect}>
+                  <button
+                    className="primary-button"
+                    data-testid="connect-button"
+                    onClick={handleConnect}
+                  >
                     Enter realm
                   </button>
                 </div>
@@ -395,7 +414,7 @@ export function GameShell() {
                   </div>
                 ) : null}
                 <div className="character-grid">
-                  {(["male", "female"] as CharacterBodyType[]).map((bodyType) => (
+                  {SELECTABLE_BODY_TYPES.map((bodyType) => (
                     <button
                       key={bodyType}
                       type="button"
@@ -411,7 +430,11 @@ export function GameShell() {
                 </div>
                 {error ? <div className="error-box">{error}</div> : null}
                 <div className="actions">
-                  <button className="primary-button" data-testid="create-character-button" onClick={handleCreateCharacter}>
+                  <button
+                    className="primary-button"
+                    data-testid="create-character-button"
+                    onClick={handleCreateCharacter}
+                  >
                     Create and enter realm
                   </button>
                   <button className="secondary-button" onClick={() => setStage("menu")}>

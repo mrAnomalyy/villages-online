@@ -1,4 +1,10 @@
-import { GRAVITY, JUMP_VELOCITY, PLAYER_SPEED, type EntitySnapshot, type Vector3Like } from "@villages/shared";
+import {
+  GRAVITY,
+  JUMP_VELOCITY,
+  PLAYER_SPEED,
+  type EntitySnapshot,
+  type Vector3Like,
+} from "@villages/shared";
 import { getHeightAt, resolveChunkIdForPosition } from "@villages/world";
 import type { NpcEntity, PlayerEntity } from "./types";
 
@@ -41,7 +47,7 @@ export function stepNpc(entity: NpcEntity, deltaSeconds: number): void {
 export function withChunk(snapshot: Omit<EntitySnapshot, "chunkId">): EntitySnapshot {
   return {
     ...snapshot,
-    chunkId: resolveChunkIdForPosition(snapshot.position.x, snapshot.position.z)
+    chunkId: resolveChunkIdForPosition(snapshot.position.x, snapshot.position.z),
   };
 }
 
@@ -52,7 +58,6 @@ export function createNpc(id: string, label: string, patrolPath: Vector3Like[]):
     position: { ...patrolPath[0] },
     patrolPath,
     patrolIndex: 1,
-    velocityY: 0
+    velocityY: 0,
   };
 }
-

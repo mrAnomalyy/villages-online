@@ -10,6 +10,9 @@ type Props = {
   onJump: () => void;
 };
 
+const MOVEMENT_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD"] as const;
+const CONTROL_KEYS = [...MOVEMENT_KEYS, "Space"] as const;
+
 export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const worldRef = useRef(world);
@@ -48,7 +51,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         MeshBuilder,
         Scene,
         StandardMaterial,
-        Vector3
+        Vector3,
       } = core;
 
       Logger.LogLevels = Logger.WarningLogLevel | Logger.ErrorLogLevel;
@@ -72,12 +75,12 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         }
         onMoveRef.current({
           x: rawX / length,
-          z: rawZ / length
+          z: rawZ / length,
         });
       };
 
       const keydown = (event: KeyboardEvent) => {
-        if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(event.code)) {
+        if (CONTROL_KEYS.includes(event.code as (typeof CONTROL_KEYS)[number])) {
           event.preventDefault();
         }
         if (event.repeat) {
@@ -87,14 +90,14 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
           onJumpRef.current();
           return;
         }
-        if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
+        if (MOVEMENT_KEYS.includes(event.code as (typeof MOVEMENT_KEYS)[number])) {
           pressedKeys.add(event.code);
           emitDirection();
         }
       };
 
       const keyup = (event: KeyboardEvent) => {
-        if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
+        if (MOVEMENT_KEYS.includes(event.code as (typeof MOVEMENT_KEYS)[number])) {
           pressedKeys.delete(event.code);
           emitDirection();
         }
@@ -108,7 +111,14 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         onMoveRef.current({ x: 0, z: 0 });
       };
 
-      const camera = new ArcRotateCamera("camera", -Math.PI / 4, 1.1, 42, new Vector3(8, 0, 8), activeScene);
+      const camera = new ArcRotateCamera(
+        "camera",
+        -Math.PI / 4,
+        1.1,
+        42,
+        new Vector3(8, 0, 8),
+        activeScene
+      );
       camera.lowerRadiusLimit = 28;
       camera.upperRadiusLimit = 48;
       camera.wheelPrecision = 50;
@@ -156,7 +166,9 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         );
         mesh.position.x = chunk.x * chunk.size + chunk.size / 2;
         mesh.position.z = chunk.z * chunk.size + chunk.size / 2;
-        mesh.material = chunk.heights.some((row) => row.some((value) => value === 0)) ? waterMaterial : terrainMaterial;
+        mesh.material = chunk.heights.some((row) => row.some((value) => value === 0))
+          ? waterMaterial
+          : terrainMaterial;
 
         const positions = mesh.getVerticesData(core.VertexBuffer.PositionKind);
         if (positions) {
@@ -173,7 +185,8 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       });
 
       const playerMesh = MeshBuilder.CreateBox("player", { size: 1.2, height: 2.2 }, activeScene);
-      playerMesh.material = worldRef.current.player.bodyType === "female" ? femalePlayerMaterial : playerMaterial;
+      playerMesh.material =
+        worldRef.current.player.bodyType === "female" ? femalePlayerMaterial : playerMaterial;
       const cameraTarget = new Vector3(
         worldRef.current.player.position.x,
         0,
@@ -184,8 +197,16 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       const nameplates = new Map<string, import("@babylonjs/core").Mesh>();
 
       const createNameplate = (id: string, label: string) => {
-        const plane = MeshBuilder.CreatePlane(`${id}-nameplate`, { width: 2.8, height: 0.7 }, activeScene);
-        const texture = new core.DynamicTexture(`${id}-nameplate-texture`, { width: 512, height: 128 }, activeScene);
+        const plane = MeshBuilder.CreatePlane(
+          `${id}-nameplate`,
+          { width: 2.8, height: 0.7 },
+          activeScene
+        );
+        const texture = new core.DynamicTexture(
+          `${id}-nameplate-texture`,
+          { width: 512, height: 128 },
+          activeScene
+        );
         texture.hasAlpha = true;
         const context = texture.getContext() as unknown as CanvasRenderingContext2D;
         context.clearRect(0, 0, 512, 128);
@@ -231,14 +252,22 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
                 : npcMaterial;
             entityMeshes.set(snapshot.id, mesh);
           }
-          mesh.position.copyFromFloats(snapshot.position.x, snapshot.position.y + 1, snapshot.position.z);
+          mesh.position.copyFromFloats(
+            snapshot.position.x,
+            snapshot.position.y + 1,
+            snapshot.position.z
+          );
 
           let plate = nameplates.get(snapshot.id);
           if (!plate) {
             plate = createNameplate(snapshot.id, snapshot.label);
             nameplates.set(snapshot.id, plate);
           }
-          plate.position.copyFromFloats(snapshot.position.x, snapshot.position.y + 3.1, snapshot.position.z);
+          plate.position.copyFromFloats(
+            snapshot.position.x,
+            snapshot.position.y + 3.1,
+            snapshot.position.z
+          );
         }
 
         for (const [id, mesh] of entityMeshes.entries()) {
@@ -276,6 +305,11 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         const currentWorld = worldRef.current;
         const currentEntities = entitiesRef.current;
         updateCameraBasis();
+        const playerNameplateTarget = new Vector3(
+          currentWorld.player.position.x,
+          currentWorld.player.position.y + 3.2,
+          currentWorld.player.position.z
+        );
         const playerTarget = new Vector3(
           currentWorld.player.position.x,
           currentWorld.player.position.y + 1,
@@ -284,7 +318,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         playerMesh.position = Vector3.Lerp(playerMesh.position, playerTarget, 0.3);
         playerNameplate.position = Vector3.Lerp(
           playerNameplate.position,
-          new Vector3(currentWorld.player.position.x, currentWorld.player.position.y + 3.2, currentWorld.player.position.z),
+          playerNameplateTarget,
           0.3
         );
         syncEntities(currentEntities);
@@ -320,7 +354,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
     }
 
     let cleanup: (() => void) | undefined;
-    boot().then((maybeCleanup) => {
+    void boot().then((maybeCleanup) => {
       cleanup = maybeCleanup;
     });
 

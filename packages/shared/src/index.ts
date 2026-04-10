@@ -127,4 +127,3 @@ export const CHUNK_SIZE = 16;
 export function sanitizeNickname(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
-

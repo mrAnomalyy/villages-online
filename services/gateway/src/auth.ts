@@ -10,7 +10,11 @@ function generateToken(): string {
   return crypto.randomBytes(24).toString("hex");
 }
 
-export async function registerOrResumeGuest(pool: Pool, nicknameInput: string, existingToken?: string) {
+export async function registerOrResumeGuest(
+  pool: Pool,
+  nicknameInput: string,
+  existingToken?: string
+) {
   const nickname = sanitizeNickname(nicknameInput);
   if (nickname.length < 3) {
     throw new Error("Nickname must be at least 3 characters long.");
@@ -33,7 +37,7 @@ export async function registerOrResumeGuest(pool: Pool, nicknameInput: string, e
     return {
       playerId,
       nickname,
-      token
+      token,
     };
   }
 
@@ -49,11 +53,10 @@ export async function registerOrResumeGuest(pool: Pool, nicknameInput: string, e
   return {
     playerId: row.id,
     nickname: row.nickname,
-    token: existingToken
+    token: existingToken,
   };
 }
 
 export function makeTicket(): string {
   return crypto.randomBytes(18).toString("hex");
 }
-

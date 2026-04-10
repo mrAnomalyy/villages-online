@@ -14,11 +14,18 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const worldRef = useRef(world);
   const entitiesRef = useRef(entities);
+  const onMoveRef = useRef(onMove);
+  const onJumpRef = useRef(onJump);
 
   useEffect(() => {
     worldRef.current = world;
     entitiesRef.current = entities;
   }, [entities, world]);
+
+  useEffect(() => {
+    onMoveRef.current = onMove;
+    onJumpRef.current = onJump;
+  }, [onJump, onMove]);
 
   useEffect(() => {
     let engine: import("@babylonjs/core").Engine | null = null;
@@ -56,10 +63,10 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         const rawZ = Number(pressedKeys.has("KeyW")) - Number(pressedKeys.has("KeyS"));
         const length = Math.hypot(rawX, rawZ);
         if (length === 0) {
-          onMove({ x: 0, z: 0 });
+          onMoveRef.current({ x: 0, z: 0 });
           return;
         }
-        onMove({
+        onMoveRef.current({
           x: rawX / length,
           z: rawZ / length
         });
@@ -73,7 +80,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
           return;
         }
         if (event.code === "Space") {
-          onJump();
+          onJumpRef.current();
           return;
         }
         if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
@@ -199,7 +206,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
 
       return () => {
         pressedKeys.clear();
-        onMove({ x: 0, z: 0 });
+        onMoveRef.current({ x: 0, z: 0 });
         window.removeEventListener("keydown", keydown);
         window.removeEventListener("keyup", keyup);
         window.removeEventListener("resize", resize);
@@ -218,7 +225,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       scene?.dispose();
       engine?.dispose();
     };
-  }, [onJump, onMove]);
+  }, []);
 
   return <canvas ref={canvasRef} data-testid="game-canvas" />;
 }

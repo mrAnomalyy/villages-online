@@ -61,6 +61,7 @@ export function GameShell() {
   const [error, setError] = useState<string | null>(null);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const lastSubscribedChunkIdRef = useRef<string | null>(null);
 
   const selectedRealm = useMemo(
     () => realms.find((realm) => realm.id === selectedRealmId) ?? null,
@@ -191,6 +192,10 @@ export function GameShell() {
           setWorld(message.payload);
           setEntities(message.payload.entities);
           setLoadedChunkIds(message.payload.chunks.map((chunk) => chunk.id));
+          lastSubscribedChunkIdRef.current = resolveChunkId(
+            message.payload.player.position.x,
+            message.payload.player.position.z
+          );
           setLoadingProgress(100);
           setStatus("Realm ready.");
           setStage("game");
@@ -199,6 +204,7 @@ export function GameShell() {
         }
 
         if (message.type === "snapshot") {
+          const chunkId = resolveChunkId(message.self.position.x, message.self.position.z);
           setWorld((current) =>
             current
               ? {
@@ -208,8 +214,10 @@ export function GameShell() {
               : current
           );
           setEntities(message.entities);
-          const chunkId = resolveChunkId(message.self.position.x, message.self.position.z);
-          socket.send(JSON.stringify({ type: "subscribeChunks", centerChunkId: chunkId }));
+          if (lastSubscribedChunkIdRef.current !== chunkId) {
+            lastSubscribedChunkIdRef.current = chunkId;
+            socket.send(JSON.stringify({ type: "subscribeChunks", centerChunkId: chunkId }));
+          }
           return;
         }
 

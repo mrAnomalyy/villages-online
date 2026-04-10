@@ -24,23 +24,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
     let engine: import("@babylonjs/core").Engine | null = null;
     let scene: import("@babylonjs/core").Scene | null = null;
     let animationFrameActive = true;
-
-    const direction = { x: 0, z: 0 };
-
-    const keydown = (event: KeyboardEvent) => {
-      if (event.code === "KeyW") direction.z = 1;
-      if (event.code === "KeyS") direction.z = -1;
-      if (event.code === "KeyA") direction.x = -1;
-      if (event.code === "KeyD") direction.x = 1;
-      if (event.code === "Space") onJump();
-      onMove(direction);
-    };
-
-    const keyup = (event: KeyboardEvent) => {
-      if (event.code === "KeyW" || event.code === "KeyS") direction.z = 0;
-      if (event.code === "KeyA" || event.code === "KeyD") direction.x = 0;
-      onMove(direction);
-    };
+    const pressedKeys = new Set<string>();
 
     async function boot() {
       if (!canvasRef.current) {
@@ -48,12 +32,62 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       }
 
       const core = await import("@babylonjs/core");
-      const { ArcRotateCamera, Color3, DirectionalLight, Engine, MeshBuilder, Scene, StandardMaterial, Vector3 } = core;
+      const {
+        ArcRotateCamera,
+        Color3,
+        DirectionalLight,
+        Engine,
+        Logger,
+        MeshBuilder,
+        Scene,
+        StandardMaterial,
+        Vector3
+      } = core;
+
+      Logger.LogLevels = Logger.WarningLogLevel | Logger.ErrorLogLevel;
 
       engine = new Engine(canvasRef.current, true);
       scene = new Scene(engine);
       scene.clearColor.set(0.05, 0.09, 0.14, 1);
       const activeScene = scene;
+
+      const emitDirection = () => {
+        const rawX = Number(pressedKeys.has("KeyD")) - Number(pressedKeys.has("KeyA"));
+        const rawZ = Number(pressedKeys.has("KeyW")) - Number(pressedKeys.has("KeyS"));
+        const length = Math.hypot(rawX, rawZ);
+        if (length === 0) {
+          onMove({ x: 0, z: 0 });
+          return;
+        }
+        onMove({
+          x: rawX / length,
+          z: rawZ / length
+        });
+      };
+
+      const keydown = (event: KeyboardEvent) => {
+        if (["KeyW", "KeyA", "KeyS", "KeyD", "Space"].includes(event.code)) {
+          event.preventDefault();
+        }
+        if (event.repeat) {
+          return;
+        }
+        if (event.code === "Space") {
+          onJump();
+          return;
+        }
+        if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
+          pressedKeys.add(event.code);
+          emitDirection();
+        }
+      };
+
+      const keyup = (event: KeyboardEvent) => {
+        if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
+          pressedKeys.delete(event.code);
+          emitDirection();
+        }
+      };
 
       const camera = new ArcRotateCamera("camera", -Math.PI / 4, 1.1, 42, new Vector3(8, 0, 8), activeScene);
       camera.lowerRadiusLimit = 28;
@@ -104,6 +138,11 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
 
       const playerMesh = MeshBuilder.CreateBox("player", { size: 1.2, height: 2.2 }, activeScene);
       playerMesh.material = playerMaterial;
+      const cameraTarget = new Vector3(
+        worldRef.current.player.position.x,
+        0,
+        worldRef.current.player.position.z
+      );
 
       const npcMeshes = new Map<string, import("@babylonjs/core").Mesh>();
 
@@ -141,13 +180,16 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         }
         const currentWorld = worldRef.current;
         const currentEntities = entitiesRef.current;
-        playerMesh.position.copyFromFloats(
+        const playerTarget = new Vector3(
           currentWorld.player.position.x,
           currentWorld.player.position.y + 1,
           currentWorld.player.position.z
         );
+        playerMesh.position = Vector3.Lerp(playerMesh.position, playerTarget, 0.3);
         syncEntities(currentEntities.filter((entity) => entity.kind === "npc"));
-        camera.target = new Vector3(currentWorld.player.position.x, 0, currentWorld.player.position.z);
+        cameraTarget.x += (currentWorld.player.position.x - cameraTarget.x) * 0.15;
+        cameraTarget.z += (currentWorld.player.position.z - cameraTarget.z) * 0.15;
+        camera.target.copyFrom(cameraTarget);
         scene.render();
       });
 
@@ -156,6 +198,8 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       window.addEventListener("resize", resize);
 
       return () => {
+        pressedKeys.clear();
+        onMove({ x: 0, z: 0 });
         window.removeEventListener("keydown", keydown);
         window.removeEventListener("keyup", keyup);
         window.removeEventListener("resize", resize);

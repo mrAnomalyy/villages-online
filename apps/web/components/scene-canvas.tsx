@@ -59,8 +59,16 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       const activeScene = scene;
 
       const emitDirection = () => {
-        const rawX = Number(pressedKeys.has("KeyD")) - Number(pressedKeys.has("KeyA"));
-        const rawZ = Number(pressedKeys.has("KeyW")) - Number(pressedKeys.has("KeyS"));
+        const rawX =
+          Number(pressedKeys.has("KeyW")) +
+          Number(pressedKeys.has("KeyD")) -
+          Number(pressedKeys.has("KeyA")) -
+          Number(pressedKeys.has("KeyS"));
+        const rawZ =
+          Number(pressedKeys.has("KeyW")) +
+          Number(pressedKeys.has("KeyA")) -
+          Number(pressedKeys.has("KeyS")) -
+          Number(pressedKeys.has("KeyD"));
         const length = Math.hypot(rawX, rawZ);
         if (length === 0) {
           onMoveRef.current({ x: 0, z: 0 });
@@ -94,6 +102,14 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
           pressedKeys.delete(event.code);
           emitDirection();
         }
+      };
+
+      const blur = () => {
+        if (pressedKeys.size === 0) {
+          return;
+        }
+        pressedKeys.clear();
+        onMoveRef.current({ x: 0, z: 0 });
       };
 
       const camera = new ArcRotateCamera("camera", -Math.PI / 4, 1.1, 42, new Vector3(8, 0, 8), activeScene);
@@ -202,6 +218,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
 
       window.addEventListener("keydown", keydown);
       window.addEventListener("keyup", keyup);
+      window.addEventListener("blur", blur);
       window.addEventListener("resize", resize);
 
       return () => {
@@ -209,6 +226,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         onMoveRef.current({ x: 0, z: 0 });
         window.removeEventListener("keydown", keydown);
         window.removeEventListener("keyup", keyup);
+        window.removeEventListener("blur", blur);
         window.removeEventListener("resize", resize);
         terrainMeshes.forEach((mesh) => mesh.dispose());
       };

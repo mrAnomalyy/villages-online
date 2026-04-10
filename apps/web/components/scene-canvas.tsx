@@ -57,18 +57,14 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       scene = new Scene(engine);
       scene.clearColor.set(0.05, 0.09, 0.14, 1);
       const activeScene = scene;
+      let cameraForward = { x: 0, z: 1 };
+      let cameraRight = { x: 1, z: 0 };
 
       const emitDirection = () => {
-        const rawX =
-          Number(pressedKeys.has("KeyW")) +
-          Number(pressedKeys.has("KeyD")) -
-          Number(pressedKeys.has("KeyA")) -
-          Number(pressedKeys.has("KeyS"));
-        const rawZ =
-          Number(pressedKeys.has("KeyW")) +
-          Number(pressedKeys.has("KeyA")) -
-          Number(pressedKeys.has("KeyS")) -
-          Number(pressedKeys.has("KeyD"));
+        const vertical = Number(pressedKeys.has("KeyW")) - Number(pressedKeys.has("KeyS"));
+        const horizontal = Number(pressedKeys.has("KeyD")) - Number(pressedKeys.has("KeyA"));
+        const rawX = cameraForward.x * vertical + cameraRight.x * horizontal;
+        const rawZ = cameraForward.z * vertical + cameraRight.z * horizontal;
         const length = Math.hypot(rawX, rawZ);
         if (length === 0) {
           onMoveRef.current({ x: 0, z: 0 });
@@ -118,6 +114,14 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       camera.wheelPrecision = 50;
       camera.inputs.clear();
       camera.attachControl(canvasRef.current, true);
+
+      const updateCameraBasis = () => {
+        const viewDirection = camera.position.subtract(camera.target);
+        const groundForward = new Vector3(-viewDirection.x, 0, -viewDirection.z).normalize();
+        cameraForward = { x: groundForward.x, z: groundForward.z };
+        cameraRight = { x: groundForward.z, z: -groundForward.x };
+      };
+      updateCameraBasis();
 
       const light = new DirectionalLight("sun", new Vector3(-1, -2, -1), activeScene);
       light.intensity = 1.5;
@@ -203,6 +207,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         }
         const currentWorld = worldRef.current;
         const currentEntities = entitiesRef.current;
+        updateCameraBasis();
         const playerTarget = new Vector3(
           currentWorld.player.position.x,
           currentWorld.player.position.y + 1,

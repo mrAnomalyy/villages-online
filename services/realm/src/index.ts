@@ -2,14 +2,14 @@ import http from "node:http";
 import express from "express";
 import Redis from "ioredis";
 import { Pool } from "pg";
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import {
   TICK_RATE,
   type ClientSocketMessage,
   type InitialWorldPayload,
   type ServerSocketMessage
 } from "@villages/shared";
-import { getInitialChunks, getNeighborChunks, resolveChunkIdForPosition, TEST_MAP_ID } from "@villages/world";
+import { getInitialChunks, getNeighborChunks, TEST_MAP_ID } from "@villages/world";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
 import type { PlayerEntity } from "./types";
 
@@ -82,7 +82,7 @@ function broadcastSnapshots(): void {
   ];
 
   for (const [characterId, socket] of sockets.entries()) {
-    if (socket.readyState !== socket.OPEN) {
+    if (socket.readyState !== WebSocket.OPEN) {
       continue;
     }
     const self = entities.find((entity) => entity.id === characterId);
@@ -185,15 +185,29 @@ wss.on("connection", (socket) => {
           position: player.position,
           velocityY: player.velocityY
         }),
-        entities: visibleNpcs.map((npc) =>
-          withChunk({
-            id: npc.id,
-            kind: "npc",
-            label: npc.label,
-            position: npc.position,
-            velocityY: npc.velocityY
-          })
-        )
+        entities: [
+          ...Array.from(players.values())
+            .filter((otherPlayer) => otherPlayer.id !== player.id)
+            .map((otherPlayer) =>
+              withChunk({
+                id: otherPlayer.id,
+                kind: "player",
+                label: otherPlayer.label,
+                bodyType: otherPlayer.bodyType,
+                position: otherPlayer.position,
+                velocityY: otherPlayer.velocityY
+              })
+            ),
+          ...visibleNpcs.map((npc) =>
+            withChunk({
+              id: npc.id,
+              kind: "npc",
+              label: npc.label,
+              position: npc.position,
+              velocityY: npc.velocityY
+            })
+          )
+        ]
       };
       socket.send(JSON.stringify({ type: "welcome", payload: initial } satisfies ServerSocketMessage));
       return;

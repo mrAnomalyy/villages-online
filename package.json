@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "lint": "yarn workspaces foreach -A run lint",
     "docker:up": "docker compose up --build -d",
-    "docker:down": "docker compose down -v"
+    "docker:down": "docker compose down -v",
+    "docker:test:e2e": "docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tester"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
@@ -26,4 +27,3 @@
     "vitest": "^3.2.4"
   }
 }
-

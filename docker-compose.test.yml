@@ -1,0 +1,16 @@
+services:
+  gateway:
+    environment:
+      REALM_DIRECTORY_JSON: >
+        [{"id":"alpha","name":"Alpha Realm","httpUrl":"http://realm-alpha:4101","wsUrl":"ws://realm-alpha:4101/ws"},{"id":"beta","name":"Beta Realm","httpUrl":"http://realm-beta:4102","wsUrl":"ws://realm-beta:4102/ws"}]
+
+  tester:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    environment:
+      PLAYWRIGHT_BASE_URL: http://web:3000
+    depends_on:
+      web:
+        condition: service_started
+

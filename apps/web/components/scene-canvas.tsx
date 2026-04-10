@@ -135,8 +135,14 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       const playerMaterial = new StandardMaterial("player", activeScene);
       playerMaterial.diffuseColor = new Color3(0.83, 0.67, 0.24);
 
+      const femalePlayerMaterial = new StandardMaterial("player-female", activeScene);
+      femalePlayerMaterial.diffuseColor = new Color3(0.94, 0.45, 0.73);
+
       const remotePlayerMaterial = new StandardMaterial("remote-player", activeScene);
       remotePlayerMaterial.diffuseColor = new Color3(0.36, 0.72, 0.93);
+
+      const remoteFemalePlayerMaterial = new StandardMaterial("remote-player-female", activeScene);
+      remoteFemalePlayerMaterial.diffuseColor = new Color3(0.97, 0.58, 0.8);
 
       const npcMaterial = new StandardMaterial("npc", activeScene);
       npcMaterial.diffuseColor = new Color3(0.76, 0.31, 0.27);
@@ -167,7 +173,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       });
 
       const playerMesh = MeshBuilder.CreateBox("player", { size: 1.2, height: 2.2 }, activeScene);
-      playerMesh.material = playerMaterial;
+      playerMesh.material = worldRef.current.player.bodyType === "female" ? femalePlayerMaterial : playerMaterial;
       const cameraTarget = new Vector3(
         worldRef.current.player.position.x,
         0,
@@ -175,6 +181,38 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       );
 
       const entityMeshes = new Map<string, import("@babylonjs/core").Mesh>();
+      const nameplates = new Map<string, import("@babylonjs/core").Mesh>();
+
+      const createNameplate = (id: string, label: string) => {
+        const plane = MeshBuilder.CreatePlane(`${id}-nameplate`, { width: 2.8, height: 0.7 }, activeScene);
+        const texture = new core.DynamicTexture(`${id}-nameplate-texture`, { width: 512, height: 128 }, activeScene);
+        texture.hasAlpha = true;
+        const context = texture.getContext() as unknown as CanvasRenderingContext2D;
+        context.clearRect(0, 0, 512, 128);
+        context.fillStyle = "rgba(7, 15, 28, 0.72)";
+        context.fillRect(16, 18, 480, 92);
+        context.strokeStyle = "rgba(242, 231, 211, 0.85)";
+        context.lineWidth = 4;
+        context.strokeRect(16, 18, 480, 92);
+        context.font = "bold 52px Georgia";
+        context.fillStyle = "#f7f2e8";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(label, 256, 64);
+        texture.update();
+
+        const material = new StandardMaterial(`${id}-nameplate-material`, activeScene);
+        material.diffuseTexture = texture;
+        material.emissiveColor = Color3.White();
+        material.backFaceCulling = false;
+        material.useAlphaFromDiffuseTexture = true;
+        plane.material = material;
+        plane.billboardMode = core.Mesh.BILLBOARDMODE_ALL;
+        plane.isPickable = false;
+        return plane;
+      };
+
+      const playerNameplate = createNameplate("player-self", worldRef.current.player.label);
 
       const syncEntities = (snapshots: EntitySnapshot[]) => {
         for (const snapshot of snapshots) {
@@ -185,16 +223,39 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
               snapshot.kind === "player" ? { size: 1.15, height: 2.1 } : { size: 1.1, height: 2 },
               activeScene
             );
-            mesh.material = snapshot.kind === "player" ? remotePlayerMaterial : npcMaterial;
+            mesh.material =
+              snapshot.kind === "player"
+                ? snapshot.bodyType === "female"
+                  ? remoteFemalePlayerMaterial
+                  : remotePlayerMaterial
+                : npcMaterial;
             entityMeshes.set(snapshot.id, mesh);
           }
           mesh.position.copyFromFloats(snapshot.position.x, snapshot.position.y + 1, snapshot.position.z);
+
+          let plate = nameplates.get(snapshot.id);
+          if (!plate) {
+            plate = createNameplate(snapshot.id, snapshot.label);
+            nameplates.set(snapshot.id, plate);
+          }
+          plate.position.copyFromFloats(snapshot.position.x, snapshot.position.y + 3.1, snapshot.position.z);
         }
 
         for (const [id, mesh] of entityMeshes.entries()) {
           if (!snapshots.some((snapshot) => snapshot.id === id)) {
             mesh.dispose();
             entityMeshes.delete(id);
+          }
+        }
+
+        for (const [id, plate] of nameplates.entries()) {
+          if (!snapshots.some((snapshot) => snapshot.id === id)) {
+            const material = plate.material;
+            plate.dispose();
+            if (material && "dispose" in material) {
+              material.dispose();
+            }
+            nameplates.delete(id);
           }
         }
       };
@@ -221,6 +282,11 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
           currentWorld.player.position.z
         );
         playerMesh.position = Vector3.Lerp(playerMesh.position, playerTarget, 0.3);
+        playerNameplate.position = Vector3.Lerp(
+          playerNameplate.position,
+          new Vector3(currentWorld.player.position.x, currentWorld.player.position.y + 3.2, currentWorld.player.position.z),
+          0.3
+        );
         syncEntities(currentEntities);
         cameraTarget.x += (currentWorld.player.position.x - cameraTarget.x) * 0.15;
         cameraTarget.z += (currentWorld.player.position.z - cameraTarget.z) * 0.15;
@@ -240,7 +306,16 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         window.removeEventListener("keyup", keyup);
         window.removeEventListener("blur", blur);
         window.removeEventListener("resize", resize);
+        playerNameplate.dispose();
         terrainMeshes.forEach((mesh) => mesh.dispose());
+        entityMeshes.forEach((mesh) => mesh.dispose());
+        nameplates.forEach((plate) => {
+          const material = plate.material;
+          plate.dispose();
+          if (material && "dispose" in material) {
+            material.dispose();
+          }
+        });
       };
     }
 

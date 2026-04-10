@@ -59,6 +59,7 @@ export function GameShell() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [status, setStatus] = useState("Waiting for a traveler.");
   const [error, setError] = useState<string | null>(null);
+  const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
 
   const selectedRealm = useMemo(
@@ -141,6 +142,7 @@ export function GameShell() {
     window.localStorage.setItem("villages.nickname", auth.nickname);
     window.localStorage.setItem("villages.token", auth.token);
     setToken(auth.token);
+    setIssuedToken(auth.token);
     if (!selectedRealm) {
       throw new Error("No realm selected.");
     }
@@ -175,7 +177,7 @@ export function GameShell() {
     setStatus(`Crossing into ${realm.name}...`);
 
     await wait(400);
-    const socket = new WebSocket(joinTicket.realm.wsUrl);
+    const socket = new WebSocket(resolveRealmSocketUrl(joinTicket.realm.id));
     socketRef.current = socket;
 
     await new Promise<void>((resolve, reject) => {
@@ -299,6 +301,11 @@ export function GameShell() {
               {world.player.position.z.toFixed(2)}
             </small>
           </div>
+          {issuedToken ? (
+            <div>
+              <small>Browser token: {issuedToken}</small>
+            </div>
+          ) : null}
         </div>
         <div className="canvas-shell">
           <BabylonGameCanvas
@@ -373,6 +380,12 @@ export function GameShell() {
                     Nickname: <strong>{session?.nickname}</strong>
                   </p>
                 </div>
+                {issuedToken ? (
+                  <div className="token-box" data-testid="issued-token-box">
+                    <strong>Your browser token</strong>
+                    <div>{issuedToken}</div>
+                  </div>
+                ) : null}
                 <div className="character-grid">
                   {(["male", "female"] as CharacterBodyType[]).map((bodyType) => (
                     <button
@@ -408,4 +421,19 @@ export function GameShell() {
 
 function resolveChunkId(x: number, z: number): string {
   return `${Math.floor(x / CHUNK_SIZE)}:${Math.floor(z / CHUNK_SIZE)}`;
+}
+
+function resolveRealmSocketUrl(realmId: string): string {
+  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const host = window.location.hostname;
+
+  if (host === "web") {
+    return `${protocol}://realm-${realmId}:${realmPortForId(realmId)}/ws`;
+  }
+
+  return `${protocol}://${host}:${realmPortForId(realmId)}/ws`;
+}
+
+function realmPortForId(realmId: string): number {
+  return realmId === "beta" ? 4102 : 4101;
 }

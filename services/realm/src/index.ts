@@ -185,15 +185,29 @@ wss.on("connection", (socket) => {
           position: player.position,
           velocityY: player.velocityY
         }),
-        entities: visibleNpcs.map((npc) =>
-          withChunk({
-            id: npc.id,
-            kind: "npc",
-            label: npc.label,
-            position: npc.position,
-            velocityY: npc.velocityY
-          })
-        )
+        entities: [
+          ...Array.from(players.values())
+            .filter((otherPlayer) => otherPlayer.id !== player.id)
+            .map((otherPlayer) =>
+              withChunk({
+                id: otherPlayer.id,
+                kind: "player",
+                label: otherPlayer.label,
+                bodyType: otherPlayer.bodyType,
+                position: otherPlayer.position,
+                velocityY: otherPlayer.velocityY
+              })
+            ),
+          ...visibleNpcs.map((npc) =>
+            withChunk({
+              id: npc.id,
+              kind: "npc",
+              label: npc.label,
+              position: npc.position,
+              velocityY: npc.velocityY
+            })
+          )
+        ]
       };
       socket.send(JSON.stringify({ type: "welcome", payload: initial } satisfies ServerSocketMessage));
       return;

@@ -62,7 +62,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
 
       const emitDirection = () => {
         const vertical = Number(pressedKeys.has("KeyW")) - Number(pressedKeys.has("KeyS"));
-        const horizontal = Number(pressedKeys.has("KeyD")) - Number(pressedKeys.has("KeyA"));
+        const horizontal = Number(pressedKeys.has("KeyA")) - Number(pressedKeys.has("KeyD"));
         const rawX = cameraForward.x * vertical + cameraRight.x * horizontal;
         const rawZ = cameraForward.z * vertical + cameraRight.z * horizontal;
         const length = Math.hypot(rawX, rawZ);
@@ -119,7 +119,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         const viewDirection = camera.position.subtract(camera.target);
         const groundForward = new Vector3(-viewDirection.x, 0, -viewDirection.z).normalize();
         cameraForward = { x: groundForward.x, z: groundForward.z };
-        cameraRight = { x: groundForward.z, z: -groundForward.x };
+        cameraRight = { x: -groundForward.z, z: groundForward.x };
       };
       updateCameraBasis();
 
@@ -134,6 +134,9 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
 
       const playerMaterial = new StandardMaterial("player", activeScene);
       playerMaterial.diffuseColor = new Color3(0.83, 0.67, 0.24);
+
+      const remotePlayerMaterial = new StandardMaterial("remote-player", activeScene);
+      remotePlayerMaterial.diffuseColor = new Color3(0.36, 0.72, 0.93);
 
       const npcMaterial = new StandardMaterial("npc", activeScene);
       npcMaterial.diffuseColor = new Color3(0.76, 0.31, 0.27);
@@ -171,23 +174,27 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         worldRef.current.player.position.z
       );
 
-      const npcMeshes = new Map<string, import("@babylonjs/core").Mesh>();
+      const entityMeshes = new Map<string, import("@babylonjs/core").Mesh>();
 
       const syncEntities = (snapshots: EntitySnapshot[]) => {
         for (const snapshot of snapshots) {
-          let mesh = npcMeshes.get(snapshot.id);
+          let mesh = entityMeshes.get(snapshot.id);
           if (!mesh) {
-            mesh = MeshBuilder.CreateBox(snapshot.id, { size: 1.1, height: 2 }, activeScene);
-            mesh.material = npcMaterial;
-            npcMeshes.set(snapshot.id, mesh);
+            mesh = MeshBuilder.CreateBox(
+              snapshot.id,
+              snapshot.kind === "player" ? { size: 1.15, height: 2.1 } : { size: 1.1, height: 2 },
+              activeScene
+            );
+            mesh.material = snapshot.kind === "player" ? remotePlayerMaterial : npcMaterial;
+            entityMeshes.set(snapshot.id, mesh);
           }
           mesh.position.copyFromFloats(snapshot.position.x, snapshot.position.y + 1, snapshot.position.z);
         }
 
-        for (const [id, mesh] of npcMeshes.entries()) {
+        for (const [id, mesh] of entityMeshes.entries()) {
           if (!snapshots.some((snapshot) => snapshot.id === id)) {
             mesh.dispose();
-            npcMeshes.delete(id);
+            entityMeshes.delete(id);
           }
         }
       };
@@ -214,7 +221,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
           currentWorld.player.position.z
         );
         playerMesh.position = Vector3.Lerp(playerMesh.position, playerTarget, 0.3);
-        syncEntities(currentEntities.filter((entity) => entity.kind === "npc"));
+        syncEntities(currentEntities);
         cameraTarget.x += (currentWorld.player.position.x - cameraTarget.x) * 0.15;
         cameraTarget.z += (currentWorld.player.position.z - cameraTarget.z) * 0.15;
         camera.target.copyFrom(cameraTarget);

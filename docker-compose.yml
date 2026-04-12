@@ -8,7 +8,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-dev-data:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U villages -d villages"]
@@ -28,17 +28,28 @@ services:
       retries: 10
 
   gateway:
-    build:
-      context: .
-      dockerfile: services/gateway/Dockerfile
+    image: node:20-alpine
+    working_dir: /workspace
     environment:
       PORT: 4000
       DATABASE_URL: postgresql://villages:villages@postgres:5432/villages
       REDIS_URL: redis://redis:6379
       REALM_DIRECTORY_JSON: >
         [{"id":"alpha","name":"Alpha Realm","httpUrl":"http://127.0.0.1:4101","wsUrl":"ws://127.0.0.1:4101/ws"},{"id":"beta","name":"Beta Realm","httpUrl":"http://127.0.0.1:4102","wsUrl":"ws://127.0.0.1:4102/ws"}]
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
     ports:
       - "4000:4000"
+    volumes:
+      - .:/workspace
+      - villages-dev-node_modules:/workspace/node_modules
+      - villages-dev-yarn-cache:/root/.yarn
+    command:
+      [
+        "sh",
+        "-lc",
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace gateway dev"
+      ]
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,9 +57,8 @@ services:
         condition: service_healthy
 
   realm-alpha:
-    build:
-      context: .
-      dockerfile: services/realm/Dockerfile
+    image: node:20-alpine
+    working_dir: /workspace
     environment:
       PORT: 4101
       REALM_ID: alpha
@@ -57,16 +67,27 @@ services:
       DATABASE_URL: postgresql://villages:villages@postgres:5432/villages
       REDIS_URL: redis://redis:6379
       TEST_MODE: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
     ports:
       - "4101:4101"
+    volumes:
+      - .:/workspace
+      - villages-dev-node_modules:/workspace/node_modules
+      - villages-dev-yarn-cache:/root/.yarn
+    command:
+      [
+        "sh",
+        "-lc",
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace realm dev:alpha"
+      ]
     depends_on:
       gateway:
         condition: service_started
 
   realm-beta:
-    build:
-      context: .
-      dockerfile: services/realm/Dockerfile
+    image: node:20-alpine
+    working_dir: /workspace
     environment:
       PORT: 4102
       REALM_ID: beta
@@ -75,21 +96,45 @@ services:
       DATABASE_URL: postgresql://villages:villages@postgres:5432/villages
       REDIS_URL: redis://redis:6379
       TEST_MODE: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
     ports:
       - "4102:4102"
+    volumes:
+      - .:/workspace
+      - villages-dev-node_modules:/workspace/node_modules
+      - villages-dev-yarn-cache:/root/.yarn
+    command:
+      [
+        "sh",
+        "-lc",
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace realm dev:beta"
+      ]
     depends_on:
       gateway:
         condition: service_started
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: node:20-alpine
+    working_dir: /workspace
     environment:
       PORT: 3000
       INTERNAL_GATEWAY_URL: http://gateway:4000
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
     ports:
       - "38080:3000"
+    volumes:
+      - .:/workspace
+      - villages-dev-node_modules:/workspace/node_modules
+      - villages-dev-yarn-cache:/root/.yarn
+    command:
+      [
+        "sh",
+        "-lc",
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace web exec next dev --hostname 0.0.0.0 --port 3000"
+      ]
     depends_on:
       gateway:
         condition: service_started
@@ -99,4 +144,6 @@ services:
         condition: service_started
 
 volumes:
-  postgres-data:
+  postgres-dev-data:
+  villages-dev-node_modules:
+  villages-dev-yarn-cache:

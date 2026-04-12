@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 const gatewayUrl = process.env.INTERNAL_GATEWAY_URL ?? "http://127.0.0.1:4000";
 

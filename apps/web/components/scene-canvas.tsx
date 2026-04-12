@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { EntitySnapshot, InitialWorldPayload } from "@villages/shared";
+import type { Engine, Mesh, Scene } from "@babylonjs/core";
 
 type Props = {
   world: InitialWorldPayload;
@@ -31,8 +32,8 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
   }, [onJump, onMove]);
 
   useEffect(() => {
-    let engine: import("@babylonjs/core").Engine | null = null;
-    let scene: import("@babylonjs/core").Scene | null = null;
+    let engine: Engine | null = null;
+    let scene: Scene | null = null;
     let animationFrameActive = true;
     const pressedKeys = new Set<string>();
 
@@ -193,8 +194,8 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         worldRef.current.player.position.z
       );
 
-      const entityMeshes = new Map<string, import("@babylonjs/core").Mesh>();
-      const nameplates = new Map<string, import("@babylonjs/core").Mesh>();
+      const entityMeshes = new Map<string, Mesh>();
+      const nameplates = new Map<string, Mesh>();
 
       const createNameplate = (id: string, label: string) => {
         const plane = MeshBuilder.CreatePlane(

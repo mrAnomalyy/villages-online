@@ -3,7 +3,7 @@ import type {
   CharacterSummary,
   GuestAuthResponse,
   RealmDescriptor,
-  RealmJoinTicket
+  RealmJoinTicket,
 } from "@villages/shared";
 
 const gatewayUrl = "/api/gateway";
@@ -16,16 +16,19 @@ export async function fetchRealms(): Promise<RealmDescriptor[]> {
   return response.json();
 }
 
-export async function guestAuth(nickname: string, existingToken?: string): Promise<GuestAuthResponse> {
+export async function guestAuth(
+  nickname: string,
+  existingToken?: string
+): Promise<GuestAuthResponse> {
   const response = await fetch(`${gatewayUrl}/auth/guest`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       nickname,
-      existingToken
-    })
+      existingToken,
+    }),
   });
 
   if (!response.ok) {
@@ -44,9 +47,9 @@ export async function fetchCharacter(
   const response = await fetch(`${gatewayUrl}/realms/${realmId}/character`, {
     headers: {
       "x-player-id": playerId,
-      "x-player-token": token
+      "x-player-token": token,
     },
-    cache: "no-store"
+    cache: "no-store",
   });
 
   if (!response.ok) {
@@ -68,9 +71,9 @@ export async function createCharacter(
     headers: {
       "Content-Type": "application/json",
       "x-player-id": playerId,
-      "x-player-token": token
+      "x-player-token": token,
     },
-    body: JSON.stringify({ bodyType })
+    body: JSON.stringify({ bodyType }),
   });
 
   if (!response.ok) {
@@ -81,13 +84,17 @@ export async function createCharacter(
   return response.json();
 }
 
-export async function requestJoinTicket(realmId: string, playerId: string, token: string): Promise<RealmJoinTicket> {
+export async function requestJoinTicket(
+  realmId: string,
+  playerId: string,
+  token: string
+): Promise<RealmJoinTicket> {
   const response = await fetch(`${gatewayUrl}/realms/${realmId}/join`, {
     method: "POST",
     headers: {
       "x-player-id": playerId,
-      "x-player-token": token
-    }
+      "x-player-token": token,
+    },
   });
 
   if (!response.ok) {

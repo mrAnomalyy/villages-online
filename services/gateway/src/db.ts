@@ -1,15 +1,18 @@
 import { Pool } from "pg";
 
-const connectionString = process.env.DATABASE_URL ?? "postgresql://villages:villages@127.0.0.1:5432/villages";
+const connectionString =
+  process.env.DATABASE_URL ?? "postgresql://villages:villages@127.0.0.1:5432/villages";
 
 export const pool = new Pool({ connectionString });
 
-export async function ensureRealmRows(realms: {
-  id: string;
-  name: string;
-  httpUrl: string;
-  wsUrl: string;
-}[]): Promise<void> {
+export async function ensureRealmRows(
+  realms: {
+    id: string;
+    name: string;
+    httpUrl: string;
+    wsUrl: string;
+  }[]
+): Promise<void> {
   for (const realm of realms) {
     await pool.query(
       `INSERT INTO realms (id, name, http_url, ws_url, world_map_id)
@@ -29,4 +32,3 @@ export async function ensureRealmRows(realms: {
     );
   }
 }
-

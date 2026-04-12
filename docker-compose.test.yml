@@ -13,4 +13,3 @@ services:
     depends_on:
       web:
         condition: service_started
-

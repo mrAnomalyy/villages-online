@@ -1,10 +1,10 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "Villages Online",
-  description: "Browser-first MMO prototype foundation"
+  description: "Browser-first MMO prototype foundation",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -14,4 +14,3 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     </html>
   );
 }
-

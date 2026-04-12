@@ -32,7 +32,7 @@ const heights = [
   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 ];
 
 export const TEST_MAP_ID = "starter-valley";
@@ -53,17 +53,12 @@ export function getChunkAt(chunkX: number, chunkZ: number): TerrainChunkDTO {
     x: chunkX,
     z: chunkZ,
     size: CHUNK_SIZE,
-    heights: chunkHeights
+    heights: chunkHeights,
   };
 }
 
 export function getInitialChunks(): TerrainChunkDTO[] {
-  return [
-    getChunkAt(0, 0),
-    getChunkAt(1, 0),
-    getChunkAt(0, 1),
-    getChunkAt(1, 1)
-  ];
+  return [getChunkAt(0, 0), getChunkAt(1, 0), getChunkAt(0, 1), getChunkAt(1, 1)];
 }
 
 export function getHeightAt(x: number, z: number): number {
@@ -91,4 +86,3 @@ export function getNeighborChunks(centerChunkId: string): TerrainChunkDTO[] {
 export function resolveChunkIdForPosition(x: number, z: number): string {
   return getChunkId(Math.floor(x / CHUNK_SIZE), Math.floor(z / CHUNK_SIZE));
 }
-

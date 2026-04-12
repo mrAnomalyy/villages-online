@@ -13,17 +13,29 @@
     "dev:gateway": "yarn workspace gateway dev",
     "dev:realm:alpha": "yarn workspace realm dev:alpha",
     "dev:realm:beta": "yarn workspace realm dev:beta",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "lint": "yarn workspaces foreach -A run lint",
-    "docker:up": "docker compose up --build -d",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "yarn workspaces foreach -A run lint",
+    "docker:up": "docker compose up -d",
     "docker:down": "docker compose down -v",
-    "docker:test:e2e": "docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tester"
+    "docker:prod:up": "docker compose -f docker-compose.prod.yml up --build -d",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down -v",
+    "docker:test:e2e": "docker compose -f docker-compose.prod.yml -f docker-compose.test.yml run --rm tester"
   },
   "devDependencies": {
+    "@eslint/js": "^9.25.1",
     "@playwright/test": "^1.55.0",
     "@types/node": "^24.5.2",
+    "eslint": "^9.25.1",
+    "eslint-config-prettier": "^10.1.2",
+    "globals": "^16.0.0",
+    "prettier": "^3.5.3",
     "typescript": "^5.9.2",
+    "typescript-eslint": "^8.30.1",
     "vitest": "^3.2.4"
   }
 }

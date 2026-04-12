@@ -6,4 +6,3 @@ describe("auth helpers", () => {
     expect(makeTicket()).toHaveLength(36);
   });
 });
-

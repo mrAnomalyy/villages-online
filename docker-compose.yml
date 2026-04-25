@@ -143,6 +143,27 @@ services:
       realm-beta:
         condition: service_started
 
+  editor:
+    image: node:20-alpine
+    working_dir: /workspace
+    environment:
+      PORT: 3000
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "39090:3000"
+    volumes:
+      - .:/workspace
+      - villages-dev-node_modules:/workspace/node_modules
+      - villages-dev-yarn-cache:/root/.yarn
+    command:
+      [
+        "sh",
+        "-lc",
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace editor exec next dev --hostname 0.0.0.0 --port 3000"
+      ]
+
 volumes:
   postgres-dev-data:
   villages-dev-node_modules:

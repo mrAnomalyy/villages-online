@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "mapId": "starter-valley",
+  "name": "Starter Valley",
+  "chunkSize": 16,
+  "waterLevel": 0.6,
+  "bounds": {
+    "minChunkX": 0,
+    "maxChunkX": 0,
+    "minChunkZ": 0,
+    "maxChunkZ": 0
+  },
+  "chunks": [
+    {
+      "id": "0:0",
+      "x": 0,
+      "z": 0,
+      "size": 16,
+      "heights": [
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1],
+        [1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 2, 2, 1, 1, 1],
+        [1, 1, 1, 2, 3, 4, 4, 4, 4, 4, 3, 3, 2, 1, 1, 1],
+        [1, 1, 1, 2, 3, 4, 5, 5, 5, 4, 3, 3, 2, 1, 1, 1],
+        [1, 1, 1, 2, 3, 4, 5, 6, 5, 4, 3, 3, 2, 1, 1, 1],
+        [1, 1, 1, 2, 3, 4, 5, 5, 5, 4, 3, 3, 2, 1, 1, 1],
+        [1, 1, 1, 2, 3, 4, 4, 4, 4, 4, 3, 3, 2, 1, 1, 1],
+        [1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 2, 2, 1, 1, 1],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      ],
+      "water": [
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false],
+        [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
+        [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
+        [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
+        [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true],
+        [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true]
+      ]
+    }
+  ],
+  "npcs": [
+    {
+      "id": "guide",
+      "label": "Guide",
+      "position": { "x": 6, "y": 1, "z": 6 },
+      "behavior": { "type": "standing" }
+    },
+    {
+      "id": "watcher",
+      "label": "Watcher",
+      "position": { "x": 11, "y": 1, "z": 6 },
+      "behavior": {
+        "type": "patrol",
+        "points": [
+          { "x": 10, "y": 1, "z": 6 },
+          { "x": 12, "y": 1, "z": 7 }
+        ]
+      }
+    }
+  ]
+}

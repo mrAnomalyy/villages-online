@@ -9,7 +9,7 @@ import {
   type InitialWorldPayload,
   type ServerSocketMessage,
 } from "@villages/shared";
-import { getInitialChunks, getNeighborChunks, TEST_MAP_ID } from "@villages/world";
+import { getChunksAroundPosition, getHeightAt, getNeighborChunks, loadPublishedMapAsset, TEST_MAP_ID } from "@villages/world";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
 import type { PlayerEntity } from "./types";
 
@@ -19,6 +19,8 @@ const realmName = process.env.REALM_NAME ?? "Alpha Realm";
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgresql://villages:villages@127.0.0.1:5432/villages";
+const mapId = process.env.MAP_ID ?? TEST_MAP_ID;
+const worldMap = loadPublishedMapAsset(mapId);
 
 const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
 const pool = new Pool({ connectionString: databaseUrl });
@@ -48,16 +50,7 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 const players = new Map<string, PlayerEntity>();
 const sockets = new Map<string, WebSocket>();
-const visibleNpcs = [
-  createNpc(`${realmId}-npc-guide`, "Guide", [
-    { x: 6, y: 1, z: 6 },
-    { x: 10, y: 1, z: 6 },
-  ]),
-  createNpc(`${realmId}-npc-watcher`, "Watcher", [
-    { x: 18, y: 1, z: 8 },
-    { x: 22, y: 1, z: 12 },
-  ]),
-];
+const visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
 
 function asPlayerSnapshot(player: PlayerEntity) {
   return withChunk({
@@ -67,7 +60,7 @@ function asPlayerSnapshot(player: PlayerEntity) {
     bodyType: player.bodyType,
     position: player.position,
     velocityY: player.velocityY,
-  });
+  }, worldMap.chunkSize);
 }
 
 function broadcastSnapshots(): void {
@@ -80,7 +73,7 @@ function broadcastSnapshots(): void {
         label: npc.label,
         position: npc.position,
         velocityY: npc.velocityY,
-      })
+      }, worldMap.chunkSize)
     ),
   ];
 
@@ -121,7 +114,7 @@ async function loadCharacter(characterId: string): Promise<PlayerEntity | null> 
     bodyType: row.body_type,
     position: {
       x: Number(row.position_x),
-      y: Number(row.position_y),
+      y: getHeightAt(worldMap, Number(row.position_x), Number(row.position_z)) + 1,
       z: Number(row.position_z),
     },
     velocityY: Number(row.velocity_y),
@@ -199,8 +192,8 @@ wss.on("connection", (socket) => {
         realmId,
         playerId: player.playerId,
         characterId: player.id,
-        mapId: TEST_MAP_ID,
-        chunks: getInitialChunks(),
+        mapId: worldMap.mapId,
+        chunks: getChunksAroundPosition(worldMap, player.position.x, player.position.z),
         player: asPlayerSnapshot(player),
         entities: [
           ...Array.from(players.values())
@@ -213,7 +206,7 @@ wss.on("connection", (socket) => {
               label: npc.label,
               position: npc.position,
               velocityY: npc.velocityY,
-            })
+            }, worldMap.chunkSize)
           ),
         ],
       };
@@ -238,12 +231,12 @@ wss.on("connection", (socket) => {
     }
 
     if (message.type === "jump") {
-      applyJump(player);
+      applyJump(player, worldMap);
       return;
     }
 
     if (message.type === "subscribeChunks") {
-      const chunks = getNeighborChunks(message.centerChunkId);
+      const chunks = getNeighborChunks(worldMap, message.centerChunkId);
       socket.send(JSON.stringify({ type: "chunks", chunks } satisfies ServerSocketMessage));
     }
   });
@@ -264,10 +257,10 @@ wss.on("connection", (socket) => {
 setInterval(() => {
   const deltaSeconds = 1 / TICK_RATE;
   for (const player of players.values()) {
-    applyMovement(player, deltaSeconds);
+    applyMovement(player, deltaSeconds, worldMap);
   }
   for (const npc of visibleNpcs) {
-    stepNpc(npc, deltaSeconds);
+    stepNpc(npc, deltaSeconds, worldMap);
   }
   broadcastSnapshots();
 }, 1000 / TICK_RATE);

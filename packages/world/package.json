@@ -10,6 +10,7 @@
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@babylonjs/core": "^8.28.1",
     "@villages/shared": "workspace:*"
   },
   "devDependencies": {

@@ -44,12 +44,56 @@ export type Vector3Like = {
   z: number;
 };
 
+export type WaterMask = boolean[][];
+
 export type TerrainChunkDTO = {
   id: string;
   x: number;
   z: number;
   size: number;
   heights: number[][];
+  water: WaterMask;
+};
+
+export type StandingNpcBehavior = {
+  type: "standing";
+};
+
+export type PatrolNpcBehavior = {
+  type: "patrol";
+  points: Vector3Like[];
+};
+
+export type WanderingNpcBehavior = {
+  type: "wandering";
+  radius: number;
+};
+
+export type NpcBehavior = StandingNpcBehavior | PatrolNpcBehavior | WanderingNpcBehavior;
+
+export type MapNpcDefinition = {
+  id: string;
+  label: string;
+  position: Vector3Like;
+  behavior: NpcBehavior;
+};
+
+export type MapBounds = {
+  minChunkX: number;
+  maxChunkX: number;
+  minChunkZ: number;
+  maxChunkZ: number;
+};
+
+export type MapAsset = {
+  version: 1;
+  mapId: string;
+  name: string;
+  chunkSize: number;
+  waterLevel: number;
+  bounds: MapBounds;
+  chunks: TerrainChunkDTO[];
+  npcs: MapNpcDefinition[];
 };
 
 export type EntitySnapshot = {

@@ -1,5 +1,6 @@
 node_modules
 .next
+*.tsbuildinfo
 dist
 coverage
 playwright-report
@@ -12,4 +13,3 @@ test-results
 !.yarn/versions
 .env
 .DS_Store
-

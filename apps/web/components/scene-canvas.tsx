@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { EntitySnapshot, InitialWorldPayload } from "@villages/shared";
 import type { Engine, Mesh, Scene } from "@babylonjs/core";
+import { buildTerrainScene } from "@villages/world";
 
 type Props = {
   world: InitialWorldPayload;
@@ -137,12 +138,6 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       const light = new DirectionalLight("sun", new Vector3(-1, -2, -1), activeScene);
       light.intensity = 1.5;
 
-      const terrainMaterial = new StandardMaterial("terrain", activeScene);
-      terrainMaterial.diffuseColor = new Color3(0.39, 0.55, 0.33);
-
-      const waterMaterial = new StandardMaterial("water", activeScene);
-      waterMaterial.diffuseColor = new Color3(0.16, 0.28, 0.45);
-
       const playerMaterial = new StandardMaterial("player", activeScene);
       playerMaterial.diffuseColor = new Color3(0.83, 0.67, 0.24);
 
@@ -158,31 +153,9 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
       const npcMaterial = new StandardMaterial("npc", activeScene);
       npcMaterial.diffuseColor = new Color3(0.76, 0.31, 0.27);
 
-      const terrainMeshes = worldRef.current.chunks.map((chunk) => {
-        const subdivisions = chunk.size - 1;
-        const mesh = MeshBuilder.CreateGround(
-          `chunk-${chunk.id}`,
-          { width: chunk.size, height: chunk.size, subdivisions },
-          activeScene
-        );
-        mesh.position.x = chunk.x * chunk.size + chunk.size / 2;
-        mesh.position.z = chunk.z * chunk.size + chunk.size / 2;
-        mesh.material = chunk.heights.some((row) => row.some((value) => value === 0))
-          ? waterMaterial
-          : terrainMaterial;
-
-        const positions = mesh.getVerticesData(core.VertexBuffer.PositionKind);
-        if (positions) {
-          for (let row = 0; row < chunk.heights.length; row += 1) {
-            for (let column = 0; column < chunk.heights[row].length; column += 1) {
-              const vertex = row * chunk.heights[row].length + column;
-              positions[vertex * 3 + 1] = chunk.heights[row][column];
-            }
-          }
-          mesh.updateVerticesData(core.VertexBuffer.PositionKind, positions);
-          mesh.convertToFlatShadedMesh();
-        }
-        return mesh;
+      const terrainBundle = buildTerrainScene(core, activeScene, {
+        chunks: worldRef.current.chunks,
+        waterLevel: 0.6,
       });
 
       const playerMesh = MeshBuilder.CreateBox("player", { size: 1.2, height: 2.2 }, activeScene);
@@ -342,7 +315,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         window.removeEventListener("blur", blur);
         window.removeEventListener("resize", resize);
         playerNameplate.dispose();
-        terrainMeshes.forEach((mesh) => mesh.dispose());
+        terrainBundle.dispose();
         entityMeshes.forEach((mesh) => mesh.dispose());
         nameplates.forEach((plate) => {
           const material = plate.material;

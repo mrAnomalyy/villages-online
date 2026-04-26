@@ -98,5 +98,17 @@ services:
       realm-beta:
         condition: service_started
 
+  editor:
+    build:
+      context: .
+      dockerfile: apps/editor/Dockerfile
+    environment:
+      PORT: 3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "39090:3000"
+    volumes:
+      - ./packages/world/assets:/app/packages/world/assets
+
 volumes:
   postgres-data:

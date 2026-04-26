@@ -279,7 +279,7 @@ export function GameShell() {
         selectedBodyType
       );
       setCharacter(created);
-      await beginJoin(session.realm, session, created);
+      await beginJoin(session.realm, session);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Character creation failed.");
     }

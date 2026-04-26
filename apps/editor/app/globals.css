@@ -1,0 +1,436 @@
+:root {
+  --bg: #07131a;
+  --bg-soft: #102530;
+  --panel: rgba(9, 24, 31, 0.9);
+  --panel-strong: rgba(14, 35, 43, 0.96);
+  --line: rgba(180, 224, 214, 0.14);
+  --text: #edf4ef;
+  --muted: #8ea59d;
+  --accent: #f0a94b;
+  --accent-soft: #f6d28d;
+  --danger: #ef8476;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background:
+    radial-gradient(circle at top left, rgba(98, 177, 161, 0.18), transparent 25%),
+    radial-gradient(circle at top right, rgba(240, 169, 75, 0.16), transparent 22%),
+    linear-gradient(180deg, #08141b, #050a0e);
+  color: var(--text);
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.editor-page {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.loading-card {
+  width: min(540px, calc(100vw - 32px));
+  margin: 24vh auto 0;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 20px 24px;
+  background: var(--panel);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--accent-soft);
+  font-size: 0.72rem;
+}
+
+.mode-grid,
+.chunk-grid,
+.segmented,
+.panel-row,
+.toolbar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.canvas-panel {
+  display: grid;
+  gap: 12px;
+  position: relative;
+  height: 100vh;
+  padding: 14px;
+}
+
+.canvas-panel-full {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.editor-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #173241, #0a1319);
+  touch-action: none;
+}
+
+.floating-toolbar {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+  width: min(360px, calc(100vw - 36px));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 12px;
+  background: rgba(7, 19, 26, 0.82);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+}
+
+.floating-toolbar[data-collapsed="true"] {
+  width: min(280px, calc(100vw - 36px));
+}
+
+.floating-toolbar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.floating-toolbar-head strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.toolbar-actions {
+  justify-content: flex-end;
+}
+
+.floating-toolbar-body {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.floating-toolbar-body::-webkit-scrollbar,
+.npc-list-compact::-webkit-scrollbar {
+  width: 8px;
+}
+
+.floating-toolbar-body::-webkit-scrollbar-thumb,
+.npc-list-compact::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.compact-panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(14, 35, 43, 0.82);
+  display: grid;
+  gap: 10px;
+}
+
+.toolbar-status {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.compass-overlay {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(7, 19, 26, 0.78);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+  pointer-events: none;
+}
+
+.compass-ring {
+  --compass-rotation: 0deg;
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(circle at center, rgba(240, 169, 75, 0.16), transparent 55%),
+    rgba(255, 255, 255, 0.04);
+  transform: rotate(var(--compass-rotation));
+}
+
+.compass-mark,
+.compass-needle {
+  position: absolute;
+}
+
+.compass-mark {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.compass-mark-n {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%) rotate(calc(var(--compass-rotation) * -1));
+  color: var(--accent-soft);
+}
+
+.compass-mark-e {
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%) rotate(calc(var(--compass-rotation) * -1));
+}
+
+.compass-mark-s {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%) rotate(calc(var(--compass-rotation) * -1));
+}
+
+.compass-mark-w {
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%) rotate(calc(var(--compass-rotation) * -1));
+}
+
+.compass-needle {
+  top: 8px;
+  left: 50%;
+  width: 2px;
+  height: 28px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), rgba(240, 169, 75, 0.08));
+  box-shadow: 0 0 16px rgba(240, 169, 75, 0.35);
+}
+
+.compass-needle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #f7ead5;
+  box-shadow: 0 0 14px rgba(247, 234, 213, 0.45);
+}
+
+.compass-readout {
+  display: grid;
+  gap: 2px;
+  min-width: 46px;
+}
+
+.compass-readout strong {
+  font-size: 1rem;
+}
+
+.compass-readout span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.primary-button,
+.secondary-button,
+.danger-button,
+.mode-button,
+.npc-row,
+.chunk-grid button,
+.segmented button,
+.compact-panel button {
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.primary-button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-soft));
+  color: #211004;
+  font-weight: 700;
+}
+
+.danger-button {
+  background: rgba(239, 132, 118, 0.18);
+  color: #ffd4cf;
+}
+
+.mode-button {
+  justify-content: space-between;
+  text-transform: capitalize;
+}
+
+.mode-button small {
+  color: var(--muted);
+}
+
+.mode-button[data-active="true"],
+.segmented button[data-active="true"],
+.npc-row[data-active="true"] {
+  outline: 2px solid var(--accent);
+  background: rgba(240, 169, 75, 0.16);
+}
+
+.meta,
+.legend,
+.point-row span,
+.npc-row small {
+  color: var(--muted);
+}
+
+.npc-list,
+.npc-editor,
+.point-list {
+  display: grid;
+  gap: 10px;
+}
+
+.npc-list-compact {
+  max-height: 150px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.npc-row,
+.point-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+}
+
+input,
+select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.92rem;
+}
+
+.legend-overlay {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(7, 19, 26, 0.72);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.hotkey-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1100px) {
+  .floating-toolbar {
+    width: min(320px, calc(100vw - 28px));
+  }
+}
+
+@media (max-width: 720px) {
+  .canvas-panel {
+    padding: 10px;
+  }
+
+  .floating-toolbar {
+    top: 10px;
+    left: 10px;
+    width: min(100vw - 20px, 320px);
+  }
+
+  .floating-toolbar-head {
+    flex-direction: column;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .toolbar-actions button {
+    flex: 1 1 auto;
+  }
+
+  .legend {
+    flex-direction: column;
+  }
+
+  .compass-overlay {
+    top: 10px;
+    right: 10px;
+    padding: 8px 10px;
+  }
+
+  .compass-ring {
+    width: 60px;
+    height: 60px;
+  }
+
+  .legend-overlay {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+  }
+}

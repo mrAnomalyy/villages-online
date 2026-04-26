@@ -22,6 +22,7 @@ type Props = {
   brushRadius: number;
   selectedChunkId: string | null;
   selectedNpcId: string | null;
+  spacePressed: boolean;
   onTerrainPick: (pick: TerrainPick) => void;
   onNpcPick: (npcId: string) => void;
   onCameraHeadingChange: (headingDegrees: number) => void;
@@ -53,6 +54,7 @@ export function EditorCanvas({
   brushRadius,
   selectedChunkId,
   selectedNpcId,
+  spacePressed,
   onTerrainPick,
   onNpcPick,
   onCameraHeadingChange,
@@ -63,12 +65,17 @@ export function EditorCanvas({
   const brushRadiusRef = useRef(brushRadius);
   const selectedChunkIdRef = useRef(selectedChunkId);
   const selectedNpcIdRef = useRef(selectedNpcId);
+  const spacePressedRef = useRef(spacePressed);
   const onTerrainPickRef = useRef(onTerrainPick);
   const onNpcPickRef = useRef(onNpcPick);
   const onCameraHeadingChangeRef = useRef(onCameraHeadingChange);
   const sceneHandlesRef = useRef<SceneHandles | null>(null);
   const hoverPickRef = useRef<TerrainPick | null>(null);
   const renderedMapRef = useRef<MapAsset | null>(null);
+  const leftPointerDownRef = useRef(false);
+  const panningRef = useRef(false);
+  const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const lastPaintAtRef = useRef(0);
 
   useEffect(() => {
     mapRef.current = map;
@@ -76,10 +83,27 @@ export function EditorCanvas({
     brushRadiusRef.current = brushRadius;
     selectedChunkIdRef.current = selectedChunkId;
     selectedNpcIdRef.current = selectedNpcId;
+    spacePressedRef.current = spacePressed;
     onTerrainPickRef.current = onTerrainPick;
     onNpcPickRef.current = onNpcPick;
     onCameraHeadingChangeRef.current = onCameraHeadingChange;
-  }, [brushRadius, map, mode, onCameraHeadingChange, onNpcPick, onTerrainPick, selectedChunkId, selectedNpcId]);
+  }, [
+    brushRadius,
+    map,
+    mode,
+    onCameraHeadingChange,
+    onNpcPick,
+    onTerrainPick,
+    selectedChunkId,
+    selectedNpcId,
+    spacePressed,
+  ]);
+
+  useEffect(() => {
+    if (!spacePressed) {
+      panningRef.current = false;
+    }
+  }, [spacePressed]);
 
   useEffect(() => {
     const handles = sceneHandlesRef.current;
@@ -112,7 +136,6 @@ export function EditorCanvas({
         Color3,
         Engine,
         HemisphericLight,
-        MeshBuilder,
         Scene,
         StandardMaterial,
         Vector3,
@@ -135,6 +158,11 @@ export function EditorCanvas({
       camera.lowerRadiusLimit = Math.max(24, map.chunkSize * 0.25);
       camera.upperRadiusLimit = Math.max(96, map.chunkSize * 3);
       camera.wheelPrecision = 50;
+      camera.panningSensibility = 0;
+      const pointerInput = camera.inputs.attached.pointers as { buttons?: number[] } | undefined;
+      if (pointerInput) {
+        pointerInput.buttons = [1, 2];
+      }
 
       const emitCameraHeading = () => {
         const forward = camera.target.subtract(camera.position);
@@ -180,7 +208,84 @@ export function EditorCanvas({
       syncScene(sceneHandlesRef.current);
       renderedMapRef.current = mapRef.current;
 
-      activeScene.onPointerDown = (_event) => {
+      const resolveTerrainPick = (): TerrainPick | null => {
+        const pick = activeScene.pick(activeScene.pointerX, activeScene.pointerY);
+        if (!pick?.hit || !pick.pickedMesh) {
+          return null;
+        }
+
+        const metadata = pick.pickedMesh.metadata as
+          | { kind: "chunk"; chunkId: string }
+          | { kind: "npc"; npcId: string }
+          | undefined;
+
+        if (metadata?.kind !== "chunk" || !pick.pickedPoint) {
+          return null;
+        }
+
+        const [chunkX, chunkZ] = metadata.chunkId.split(":").map(Number);
+        const activeMap = mapRef.current;
+        const chunk = getChunkAt(activeMap, chunkX, chunkZ);
+        if (!chunk) {
+          return null;
+        }
+
+        const localX = pick.pickedPoint.x - chunk.x * chunk.size;
+        const localZ = pick.pickedPoint.z - chunk.z * chunk.size;
+        const resolution = getChunkResolution(chunk);
+        const maxLocalCoordinate = Math.max(0, chunk.size - 1e-4);
+        const preciseLocalX = clamp(localX, 0, maxLocalCoordinate);
+        const preciseLocalZ = clamp(localZ, 0, maxLocalCoordinate);
+        const sampleX = (preciseLocalX / chunk.size) * (resolution - 1);
+        const sampleZ = (preciseLocalZ / chunk.size) * (resolution - 1);
+        const column = clamp(Math.floor(sampleX), 0, resolution - 1);
+        const row = clamp(Math.floor(sampleZ), 0, resolution - 1);
+        const worldX = chunk.x * chunk.size + preciseLocalX;
+        const worldZ = chunk.z * chunk.size + preciseLocalZ;
+
+        return {
+          chunkId: chunk.id,
+          row,
+          column,
+          localX: preciseLocalX,
+          localZ: preciseLocalZ,
+          worldX,
+          worldY: getHeightAt(activeMap, worldX, worldZ) + 1,
+          worldZ,
+        };
+      };
+
+      const panCamera = (deltaX: number, deltaY: number) => {
+        const forward = camera.target.subtract(camera.position);
+        forward.y = 0;
+        if (forward.lengthSquared() < 1e-6) {
+          return;
+        }
+
+        forward.normalize();
+        const right = new Vector3(forward.z, 0, -forward.x);
+        const renderWidth = engine?.getRenderWidth() ?? 800;
+        const renderHeight = engine?.getRenderHeight() ?? 800;
+        const scale = camera.radius / Math.max(320, Math.min(renderWidth, renderHeight));
+        camera.target.addInPlace(right.scale(-deltaX * scale));
+        camera.target.addInPlace(forward.scale(deltaY * scale));
+      };
+
+      activeScene.onPointerDown = (pointerInfo) => {
+        const pointerEvent = pointerInfo as PointerEvent;
+        if (pointerEvent.button !== 0) {
+          return;
+        }
+
+        pointerEvent.preventDefault();
+        leftPointerDownRef.current = true;
+        lastPointerPositionRef.current = { x: activeScene.pointerX, y: activeScene.pointerY };
+
+        if (spacePressedRef.current) {
+          panningRef.current = true;
+          return;
+        }
+
         const pick = activeScene.pick(activeScene.pointerX, activeScene.pointerY);
         if (!pick?.hit || !pick.pickedMesh) {
           return;
@@ -196,101 +301,84 @@ export function EditorCanvas({
           return;
         }
 
-        if (metadata?.kind !== "chunk" || !pick.pickedPoint) {
+        const resolvedPick = resolveTerrainPick();
+        if (!resolvedPick) {
           return;
         }
 
-        const [chunkX, chunkZ] = metadata.chunkId.split(":").map(Number);
-        const activeMap = mapRef.current;
-        const chunk = getChunkAt(activeMap, chunkX, chunkZ);
-        if (!chunk) {
+        hoverPickRef.current = resolvedPick;
+        syncBrushPreview();
+        onTerrainPickRef.current(resolvedPick);
+        lastPaintAtRef.current = performance.now();
+      };
+
+      activeScene.onPointerUp = (pointerInfo) => {
+        const pointerEvent = pointerInfo as PointerEvent;
+        if (pointerEvent.button !== 0) {
           return;
         }
 
-        const localX = pick.pickedPoint.x - chunk.x * chunk.size;
-        const localZ = pick.pickedPoint.z - chunk.z * chunk.size;
-        const resolution = getChunkResolution(chunk);
-        const maxLocalCoordinate = Math.max(0, chunk.size - 1e-4);
-        const preciseLocalX = clamp(localX, 0, maxLocalCoordinate);
-        const preciseLocalZ = clamp(localZ, 0, maxLocalCoordinate);
-        const sampleX = (preciseLocalX / chunk.size) * (resolution - 1);
-        const sampleZ = (preciseLocalZ / chunk.size) * (resolution - 1);
-        const column = clamp(Math.floor(sampleX), 0, resolution - 1);
-        const row = clamp(Math.floor(sampleZ), 0, resolution - 1);
-        const worldX = chunk.x * chunk.size + preciseLocalX;
-        const worldZ = chunk.z * chunk.size + preciseLocalZ;
-
-        onTerrainPickRef.current({
-          chunkId: chunk.id,
-          row,
-          column,
-          localX: preciseLocalX,
-          localZ: preciseLocalZ,
-          worldX,
-          worldY: getHeightAt(activeMap, worldX, worldZ) + 1,
-          worldZ,
-        });
+        leftPointerDownRef.current = false;
+        panningRef.current = false;
+        lastPointerPositionRef.current = null;
       };
 
       activeScene.onPointerMove = () => {
-        const activeMap = mapRef.current;
-        const pick = activeScene.pick(activeScene.pointerX, activeScene.pointerY);
-        if (!pick?.hit || !pick.pickedMesh) {
-          hoverPickRef.current = null;
-          syncBrushPreview();
+        if (panningRef.current && lastPointerPositionRef.current) {
+          const deltaX = activeScene.pointerX - lastPointerPositionRef.current.x;
+          const deltaY = activeScene.pointerY - lastPointerPositionRef.current.y;
+          panCamera(deltaX, deltaY);
+          lastPointerPositionRef.current = { x: activeScene.pointerX, y: activeScene.pointerY };
           return;
         }
 
-        const metadata = pick.pickedMesh.metadata as { kind: "chunk"; chunkId: string } | undefined;
-        if (metadata?.kind !== "chunk" || !pick.pickedPoint) {
-          hoverPickRef.current = null;
-          syncBrushPreview();
-          return;
-        }
-
-        const [chunkX, chunkZ] = metadata.chunkId.split(":").map(Number);
-        const chunk = getChunkAt(activeMap, chunkX, chunkZ);
-        if (!chunk) {
-          hoverPickRef.current = null;
-          syncBrushPreview();
-          return;
-        }
-
-        const localX = pick.pickedPoint.x - chunk.x * chunk.size;
-        const localZ = pick.pickedPoint.z - chunk.z * chunk.size;
-        const resolution = getChunkResolution(chunk);
-        const maxLocalCoordinate = Math.max(0, chunk.size - 1e-4);
-        const preciseLocalX = clamp(localX, 0, maxLocalCoordinate);
-        const preciseLocalZ = clamp(localZ, 0, maxLocalCoordinate);
-        const sampleX = (preciseLocalX / chunk.size) * (resolution - 1);
-        const sampleZ = (preciseLocalZ / chunk.size) * (resolution - 1);
-        const column = clamp(Math.floor(sampleX), 0, resolution - 1);
-        const row = clamp(Math.floor(sampleZ), 0, resolution - 1);
-        const worldX = chunk.x * chunk.size + preciseLocalX;
-        const worldZ = chunk.z * chunk.size + preciseLocalZ;
-        hoverPickRef.current = {
-          chunkId: chunk.id,
-          row,
-          column,
-          localX: preciseLocalX,
-          localZ: preciseLocalZ,
-          worldX,
-          worldY: getHeightAt(activeMap, worldX, worldZ) + 1,
-          worldZ,
-        };
+        hoverPickRef.current = resolveTerrainPick();
         syncBrushPreview();
       };
 
+      const pointerUp = () => {
+        leftPointerDownRef.current = false;
+        panningRef.current = false;
+        lastPointerPositionRef.current = null;
+      };
+      const blur = () => {
+        leftPointerDownRef.current = false;
+        panningRef.current = false;
+        lastPointerPositionRef.current = null;
+      };
+      const wheel = (event: WheelEvent) => {
+        event.preventDefault();
+      };
       const resize = () => engine?.resize();
+
+      canvasRef.current.addEventListener("wheel", wheel, { passive: false });
+      window.addEventListener("pointerup", pointerUp);
+      window.addEventListener("blur", blur);
       window.addEventListener("resize", resize);
 
       engine.runRenderLoop(() => {
+        if (
+          leftPointerDownRef.current &&
+          !panningRef.current &&
+          (modeRef.current === "terrain" || modeRef.current === "water") &&
+          hoverPickRef.current
+        ) {
+          const now = performance.now();
+          if (now - lastPaintAtRef.current >= 70) {
+            onTerrainPickRef.current(hoverPickRef.current);
+            lastPaintAtRef.current = now;
+          }
+        }
+
         if (!stopped) {
           activeScene.render();
         }
       });
 
       return () => {
+        canvasRef.current?.removeEventListener("wheel", wheel);
+        window.removeEventListener("pointerup", pointerUp);
+        window.removeEventListener("blur", blur);
         window.removeEventListener("resize", resize);
         camera.onViewMatrixChangedObservable.removeCallback(emitCameraHeading);
         sceneHandlesRef.current?.terrainBundle?.dispose();
@@ -325,13 +413,18 @@ export function EditorCanvas({
     const activeMap = mapRef.current;
 
     if (!handles.terrainBundle) {
-      handles.terrainBundle = buildTerrainScene(handles.core, handles.scene, {
-        chunks: activeMap.chunks,
-        waterLevel: activeMap.waterLevel,
-      }, {
-        dynamicTerrain: true,
-        flatShaded: false,
-      });
+      handles.terrainBundle = buildTerrainScene(
+        handles.core,
+        handles.scene,
+        {
+          chunks: activeMap.chunks,
+          waterLevel: activeMap.waterLevel,
+        },
+        {
+          dynamicTerrain: true,
+          flatShaded: false,
+        }
+      );
     } else {
       handles.terrainBundle.syncMap(activeMap, renderedMapRef.current ?? undefined);
     }

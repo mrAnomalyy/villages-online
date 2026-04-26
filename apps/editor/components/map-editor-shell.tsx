@@ -33,6 +33,14 @@ type TerrainPick = {
   worldZ: number;
 };
 
+function isEditableElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
 async function readJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
   const body = (await response.json()) as T & { message?: string };
@@ -81,6 +89,9 @@ export function MapEditorShell() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [cameraHeading, setCameraHeading] = useState(0);
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [spacePressed, setSpacePressed] = useState(false);
+  const [altPressed, setAltPressed] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -96,6 +107,66 @@ export function MapEditorShell() {
     })();
   }, []);
 
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (isEditableElement(event.target)) {
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+        setSpacePressed(true);
+        return;
+      }
+
+      if (event.altKey || event.code === "AltLeft" || event.code === "AltRight") {
+        setAltPressed(true);
+      }
+
+      if (event.repeat) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "c") {
+        event.preventDefault();
+        setMode("chunk");
+      } else if (key === "q") {
+        event.preventDefault();
+        setMode("terrain");
+      } else if (key === "e") {
+        event.preventDefault();
+        setMode("water");
+      } else if (key === "n") {
+        event.preventDefault();
+        setMode("npc");
+      }
+    };
+
+    const keyup = (event: KeyboardEvent) => {
+      if (event.code === "Space") {
+        setSpacePressed(false);
+      }
+      if (!event.altKey && (event.code === "AltLeft" || event.code === "AltRight")) {
+        setAltPressed(false);
+      }
+    };
+
+    const blur = () => {
+      setSpacePressed(false);
+      setAltPressed(false);
+    };
+
+    window.addEventListener("keydown", keydown);
+    window.addEventListener("keyup", keyup);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", keydown);
+      window.removeEventListener("keyup", keyup);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+
   const selectedChunk = useMemo(
     () => (map && selectedChunkId ? getChunkById(map, selectedChunkId) : null),
     [map, selectedChunkId]
@@ -108,6 +179,7 @@ export function MapEditorShell() {
     const segment = Math.round(cameraHeading / 45) % CARDINAL_DIRECTIONS.length;
     return CARDINAL_DIRECTIONS[segment];
   }, [cameraHeading]);
+  const effectiveTerrainDelta = altPressed ? (terrainDelta === 1 ? -1 : 1) : terrainDelta;
 
   const applyMapUpdate = (nextMap: MapAsset, nextStatus: string) => {
     setMap(nextMap);
@@ -129,9 +201,9 @@ export function MapEditorShell() {
           worldZ: pick.worldZ,
           radius: brushRadius,
           intensity: brushIntensity,
-          delta: terrainDelta,
+          delta: effectiveTerrainDelta,
         }),
-        `${terrainDelta > 0 ? "Raised" : "Lowered"} terrain at ${pick.chunkId}:${pick.column},${pick.row}.`
+        `${effectiveTerrainDelta > 0 ? "Raised" : "Lowered"} terrain at ${pick.chunkId}:${pick.column},${pick.row}.`
       );
       return;
     }
@@ -230,14 +302,21 @@ export function MapEditorShell() {
 
     setSaving(true);
     try {
-      const response = await readJson<{ map: MapAsset; action: string }>(`/api/maps/${map.mapId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ map, action }),
-      });
+      const response = await readJson<{ map: MapAsset; action: string }>(
+        `/api/maps/${map.mapId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ map, action }),
+        }
+      );
       setMap(response.map);
       setDirty(false);
-      setStatus(action === "publish" ? "Published map asset. Restart realms to apply." : "Saved map asset.");
+      setStatus(
+        action === "publish"
+          ? "Published map asset. Restart realms to apply."
+          : "Saved map asset."
+      );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Map save failed.");
     } finally {
@@ -255,273 +334,316 @@ export function MapEditorShell() {
 
   return (
     <main className="editor-page">
-      <header className="editor-header">
-        <div>
-          <p className="eyebrow">Internal World Tools</p>
-          <h1>Villages Map Editor</h1>
-          <p>{status}</p>
-        </div>
-        <div className="header-actions">
-          <button className="secondary-button" disabled={saving} onClick={() => void handleSave("save")}>
-            Save
-          </button>
-          <button className="primary-button" disabled={saving} onClick={() => void handleSave("publish")}>
-            Publish
-          </button>
-        </div>
-      </header>
+      <section className="canvas-panel canvas-panel-full">
+        <div className="floating-toolbar" data-collapsed={controlsCollapsed}>
+          <div className="floating-toolbar-head">
+            <div>
+              <p className="eyebrow">Internal World Tools</p>
+              <strong>Villages Editor</strong>
+            </div>
+            <div className="toolbar-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setControlsCollapsed((value) => !value)}
+              >
+                {controlsCollapsed ? "Expand" : "Collapse"}
+              </button>
+              <button
+                className="secondary-button"
+                disabled={saving}
+                onClick={() => void handleSave("save")}
+              >
+                Save
+              </button>
+              <button
+                className="primary-button"
+                disabled={saving}
+                onClick={() => void handleSave("publish")}
+              >
+                Publish
+              </button>
+            </div>
+          </div>
+          <p className="toolbar-status">{status}</p>
+          {!controlsCollapsed ? (
+            <div className="floating-toolbar-body">
+              <div className="compact-panel">
+                <div className="panel-row">
+                  <strong>Tools</strong>
+                  <span className="meta">{dirty ? "Unsaved" : "Saved"}</span>
+                </div>
+                <div className="mode-grid">
+                  {([
+                    ["chunk", "C"],
+                    ["terrain", "Q"],
+                    ["water", "E"],
+                    ["npc", "N"],
+                  ] as const).map(([nextMode, key]) => (
+                    <button
+                      key={nextMode}
+                      className="mode-button"
+                      data-active={mode === nextMode}
+                      onClick={() => setMode(nextMode)}
+                    >
+                      <span>{nextMode}</span>
+                      <small>{key}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-      <section className="editor-layout">
-        <aside className="sidebar">
-          <div className="panel">
-            <strong>Tools</strong>
-            <div className="mode-grid">
-              {(["chunk", "terrain", "water", "npc"] as const).map((nextMode) => (
-                <button
-                  key={nextMode}
-                  className="mode-button"
-                  data-active={mode === nextMode}
-                  onClick={() => setMode(nextMode)}
-                >
-                  {nextMode}
+              <div className="compact-panel">
+                <div className="panel-row">
+                  <strong>Chunk</strong>
+                  <span className="meta">{selectedChunkId ?? "none"}</span>
+                </div>
+                <div className="chunk-grid">
+                  <button onClick={() => handleChunkExpansion(0, -1)}>North</button>
+                  <button onClick={() => handleChunkExpansion(-1, 0)}>West</button>
+                  <button onClick={() => handleChunkExpansion(1, 0)}>East</button>
+                  <button onClick={() => handleChunkExpansion(0, 1)}>South</button>
+                </div>
+                <button className="danger-button" onClick={handleChunkRemoval}>
+                  Remove
                 </button>
-              ))}
-            </div>
-            <p className="meta">{dirty ? "Unsaved changes" : "Published asset matches editor state"}</p>
-          </div>
+              </div>
 
-          <div className="panel">
-            <strong>Chunk</strong>
-            <p className="meta">Selected: {selectedChunkId ?? "none"}</p>
-            <div className="chunk-grid">
-              <button onClick={() => handleChunkExpansion(0, -1)}>Add North</button>
-              <button onClick={() => handleChunkExpansion(-1, 0)}>Add West</button>
-              <button onClick={() => handleChunkExpansion(1, 0)}>Add East</button>
-              <button onClick={() => handleChunkExpansion(0, 1)}>Add South</button>
-            </div>
-            <button className="danger-button" onClick={handleChunkRemoval}>
-              Remove Selected Chunk
-            </button>
-          </div>
-
-          <div className="panel">
-            <strong>Terrain</strong>
-            <label>
-              Radius
-              <input
-                type="range"
-                min="0"
-                max="4"
-                value={brushRadius}
-                onChange={(event) => setBrushRadius(Number(event.target.value))}
-              />
-            </label>
-            <label>
-              Intensity
-              <input
-                type="range"
-                min="1"
-                max="4"
-                value={brushIntensity}
-                onChange={(event) => setBrushIntensity(Number(event.target.value))}
-              />
-            </label>
-            <div className="segmented">
-              <button data-active={terrainDelta === 1} onClick={() => setTerrainDelta(1)}>
-                Raise
-              </button>
-              <button data-active={terrainDelta === -1} onClick={() => setTerrainDelta(-1)}>
-                Lower
-              </button>
-            </div>
-            <div className="segmented">
-              <button data-active={paintWaterValue} onClick={() => setPaintWaterValue(true)}>
-                Paint Water
-              </button>
-              <button data-active={!paintWaterValue} onClick={() => setPaintWaterValue(false)}>
-                Clear Water
-              </button>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-row">
-              <strong>NPCs</strong>
-              <button onClick={handleCreateNpc}>New NPC</button>
-            </div>
-            <div className="npc-list">
-              {map.npcs.map((npc) => (
-                <button
-                  key={npc.id}
-                  className="npc-row"
-                  data-active={selectedNpcId === npc.id}
-                  onClick={() => {
-                    setSelectedNpcId(npc.id);
-                    setMode("npc");
-                  }}
-                >
-                  <span>{npc.label}</span>
-                  <small>{npc.behavior.type}</small>
-                </button>
-              ))}
-            </div>
-            {selectedNpc ? (
-              <div className="npc-editor">
+              <div className="compact-panel">
+                <div className="panel-row">
+                  <strong>Brush</strong>
+                  <span className="meta">{spacePressed ? "Panning" : "Editing"}</span>
+                </div>
                 <label>
-                  Label
+                  Radius
                   <input
-                    value={selectedNpc.label}
-                    onChange={(event) =>
-                      applyMapUpdate(
-                        updateNpcDefinition(map, selectedNpc.id, { label: event.target.value }),
-                        `Renamed ${selectedNpc.id}.`
-                      )
-                    }
+                    type="range"
+                    min="0"
+                    max="4"
+                    value={brushRadius}
+                    onChange={(event) => setBrushRadius(Number(event.target.value))}
                   />
                 </label>
                 <label>
-                  Behavior
-                  <select
-                    value={selectedNpc.behavior.type}
-                    onChange={(event) =>
-                      applyMapUpdate(
-                        updateNpcDefinition(map, selectedNpc.id, {
-                          behavior: setNpcBehavior(
-                            selectedNpc,
-                            event.target.value as NpcBehavior["type"]
-                          ),
-                        }),
-                        `Changed ${selectedNpc.label} behavior.`
-                      )
-                    }
-                  >
-                    <option value="standing">standing</option>
-                    <option value="patrol">patrol</option>
-                    <option value="wandering">wandering</option>
-                  </select>
+                  Intensity
+                  <input
+                    type="range"
+                    min="1"
+                    max="4"
+                    value={brushIntensity}
+                    onChange={(event) => setBrushIntensity(Number(event.target.value))}
+                  />
                 </label>
-                {selectedNpc.behavior.type === "wandering" ? (
-                  <label>
-                    Radius
-                    <input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={selectedNpc.behavior.radius}
-                      onChange={(event) =>
-                        applyMapUpdate(
-                          updateNpcDefinition(map, selectedNpc.id, {
-                            behavior: {
-                              type: "wandering",
-                              radius: Number(event.target.value),
-                            },
-                          }),
-                          `Updated ${selectedNpc.label} wander radius.`
-                        )
-                      }
-                    />
-                  </label>
-                ) : null}
-                {selectedNpc.behavior.type === "patrol" ? (
-                  <div className="patrol-editor">
+                <div className="segmented">
+                  <button data-active={terrainDelta === 1} onClick={() => setTerrainDelta(1)}>
+                    Raise
+                  </button>
+                  <button data-active={terrainDelta === -1} onClick={() => setTerrainDelta(-1)}>
+                    Lower
+                  </button>
+                </div>
+                <p className="meta">
+                  Hold `Alt` to invert temporarily.
+                  {" "}
+                  {effectiveTerrainDelta > 0 ? "Currently raising." : "Currently lowering."}
+                </p>
+                <div className="segmented">
+                  <button data-active={paintWaterValue} onClick={() => setPaintWaterValue(true)}>
+                    Paint Water
+                  </button>
+                  <button
+                    data-active={!paintWaterValue}
+                    onClick={() => setPaintWaterValue(false)}
+                  >
+                    Clear Water
+                  </button>
+                </div>
+              </div>
+
+              <div className="compact-panel">
+                <div className="panel-row">
+                  <strong>NPCs</strong>
+                  <button onClick={handleCreateNpc}>New</button>
+                </div>
+                <div className="npc-list npc-list-compact">
+                  {map.npcs.map((npc) => (
+                    <button
+                      key={npc.id}
+                      className="npc-row"
+                      data-active={selectedNpcId === npc.id}
+                      onClick={() => {
+                        setSelectedNpcId(npc.id);
+                        setMode("npc");
+                      }}
+                    >
+                      <span>{npc.label}</span>
+                      <small>{npc.behavior.type}</small>
+                    </button>
+                  ))}
+                </div>
+                {selectedNpc ? (
+                  <div className="npc-editor">
+                    <label>
+                      Label
+                      <input
+                        value={selectedNpc.label}
+                        onChange={(event) =>
+                          applyMapUpdate(
+                            updateNpcDefinition(map, selectedNpc.id, {
+                              label: event.target.value,
+                            }),
+                            `Renamed ${selectedNpc.id}.`
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Behavior
+                      <select
+                        value={selectedNpc.behavior.type}
+                        onChange={(event) =>
+                          applyMapUpdate(
+                            updateNpcDefinition(map, selectedNpc.id, {
+                              behavior: setNpcBehavior(
+                                selectedNpc,
+                                event.target.value as NpcBehavior["type"]
+                              ),
+                            }),
+                            `Changed ${selectedNpc.label} behavior.`
+                          )
+                        }
+                      >
+                        <option value="standing">standing</option>
+                        <option value="patrol">patrol</option>
+                        <option value="wandering">wandering</option>
+                      </select>
+                    </label>
+                    {selectedNpc.behavior.type === "wandering" ? (
+                      <label>
+                        Radius
+                        <input
+                          type="number"
+                          min="1"
+                          max="20"
+                          value={selectedNpc.behavior.radius}
+                          onChange={(event) =>
+                            applyMapUpdate(
+                              updateNpcDefinition(map, selectedNpc.id, {
+                                behavior: {
+                                  type: "wandering",
+                                  radius: Number(event.target.value),
+                                },
+                              }),
+                              `Updated ${selectedNpc.label} wander radius.`
+                            )
+                          }
+                        />
+                      </label>
+                    ) : null}
                     <div className="segmented">
                       <button
                         data-active={npcClickMode === "move"}
                         onClick={() => setNpcClickMode("move")}
                       >
-                        Move on Click
+                        Move
                       </button>
                       <button
                         data-active={npcClickMode === "patrol"}
                         onClick={() => setNpcClickMode("patrol")}
                       >
-                        Add Patrol Point
+                        Patrol
                       </button>
                     </div>
-                    <div className="point-list">
-                      {selectedNpc.behavior.points.map((point, index) => (
-                        <div key={`${point.x}-${point.z}-${index}`} className="point-row">
-                          <span>
-                            {index + 1}. {point.x.toFixed(1)}, {point.z.toFixed(1)}
-                          </span>
-                          <button
-                            onClick={() =>
-                              applyMapUpdate(
-                                removePatrolPoint(map, selectedNpc.id, index),
-                                `Removed patrol point ${index + 1}.`
-                              )
-                            }
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    {selectedNpc.behavior.type === "patrol" ? (
+                      <div className="point-list">
+                        {selectedNpc.behavior.points.map((point, index) => (
+                          <div key={`${point.x}-${point.z}-${index}`} className="point-row">
+                            <span>
+                              {index + 1}. {point.x.toFixed(1)}, {point.z.toFixed(1)}
+                            </span>
+                            <button
+                              onClick={() =>
+                                applyMapUpdate(
+                                  removePatrolPoint(map, selectedNpc.id, index),
+                                  `Removed patrol point ${index + 1}.`
+                                )
+                              }
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <button
+                      className="danger-button"
+                      onClick={() => {
+                        applyMapUpdate(
+                          deleteNpcDefinition(map, selectedNpc.id),
+                          `Deleted ${selectedNpc.label}.`
+                        );
+                        setSelectedNpcId(
+                          map.npcs.find((npc) => npc.id !== selectedNpc.id)?.id ?? null
+                        );
+                      }}
+                    >
+                      Delete NPC
+                    </button>
                   </div>
                 ) : null}
-                {selectedNpc.behavior.type !== "patrol" ? (
-                  <div className="segmented">
-                    <button
-                      data-active={npcClickMode === "move"}
-                      onClick={() => setNpcClickMode("move")}
-                    >
-                      Move on Click
-                    </button>
-                    <button
-                      data-active={npcClickMode === "patrol"}
-                      onClick={() => setNpcClickMode("patrol")}
-                    >
-                      Add Patrol Point
-                    </button>
-                  </div>
-                ) : null}
-                <button
-                  className="danger-button"
-                  onClick={() => {
-                    applyMapUpdate(deleteNpcDefinition(map, selectedNpc.id), `Deleted ${selectedNpc.label}.`);
-                    setSelectedNpcId(map.npcs.find((npc) => npc.id !== selectedNpc.id)?.id ?? null);
-                  }}
-                >
-                  Delete NPC
-                </button>
               </div>
-            ) : null}
-          </div>
-        </aside>
 
-        <section className="canvas-panel">
-          <div className="compass-overlay" aria-live="polite">
-            <div className="compass-ring" style={{ "--compass-rotation": `${-cameraHeading}deg` } as CSSProperties}>
-              <span className="compass-mark compass-mark-n">N</span>
-              <span className="compass-mark compass-mark-e">E</span>
-              <span className="compass-mark compass-mark-s">S</span>
-              <span className="compass-mark compass-mark-w">W</span>
-              <span className="compass-needle" />
+              <div className="compact-panel hotkey-panel">
+                <strong>Hotkeys</strong>
+                <div className="hotkey-grid">
+                  <span>`Q` terrain</span>
+                  <span>`E` water</span>
+                  <span>`C` chunks</span>
+                  <span>`N` NPC</span>
+                  <span>`Space` pan</span>
+                  <span>`Alt` invert</span>
+                </div>
+              </div>
             </div>
-            <div className="compass-readout">
-              <strong>{headingLabel}</strong>
-              <span>{Math.round(cameraHeading)}°</span>
-            </div>
+          ) : null}
+        </div>
+
+        <div className="compass-overlay" aria-live="polite">
+          <div
+            className="compass-ring"
+            style={{ "--compass-rotation": `${-cameraHeading}deg` } as CSSProperties}
+          >
+            <span className="compass-mark compass-mark-n">N</span>
+            <span className="compass-mark compass-mark-e">E</span>
+            <span className="compass-mark compass-mark-s">S</span>
+            <span className="compass-mark compass-mark-w">W</span>
+            <span className="compass-needle" />
           </div>
-          <EditorCanvas
-            map={map}
-            mode={mode}
-            brushRadius={brushRadius}
-            selectedChunkId={selectedChunkId}
-            selectedNpcId={selectedNpcId}
-            onTerrainPick={handleTerrainPick}
-            onNpcPick={(npcId) => {
-              setSelectedNpcId(npcId);
-              setMode("npc");
-              setStatus(`Selected NPC ${npcId}.`);
-            }}
-            onCameraHeadingChange={setCameraHeading}
-          />
-          <div className="legend">
-            <span>Click terrain to select chunks or apply the active tool.</span>
-            <span>In NPC mode, clicking terrain moves the selected NPC or adds patrol points.</span>
+          <div className="compass-readout">
+            <strong>{headingLabel}</strong>
+            <span>{Math.round(cameraHeading)}°</span>
           </div>
-        </section>
+        </div>
+
+        <EditorCanvas
+          map={map}
+          mode={mode}
+          brushRadius={brushRadius}
+          selectedChunkId={selectedChunkId}
+          selectedNpcId={selectedNpcId}
+          spacePressed={spacePressed}
+          onTerrainPick={handleTerrainPick}
+          onNpcPick={(npcId) => {
+            setSelectedNpcId(npcId);
+            setMode("npc");
+            setStatus(`Selected NPC ${npcId}.`);
+          }}
+          onCameraHeadingChange={setCameraHeading}
+        />
+
+        <div className="legend legend-overlay">
+          <span>Hold left mouse to keep painting. Mouse wheel only zooms the canvas.</span>
+          <span>Space + drag pans the camera. NPC mode still clicks to move or add patrol points.</span>
+        </div>
       </section>
     </main>
   );

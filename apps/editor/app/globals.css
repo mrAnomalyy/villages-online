@@ -19,6 +19,8 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   background:
     radial-gradient(circle at top left, rgba(98, 177, 161, 0.18), transparent 25%),
     radial-gradient(circle at top right, rgba(240, 169, 75, 0.16), transparent 22%),
@@ -38,31 +40,18 @@ button {
 }
 
 .editor-page {
-  min-height: 100vh;
-  padding: 24px;
-  display: grid;
-  gap: 18px;
+  height: 100vh;
+  overflow: hidden;
 }
 
-.editor-header,
 .loading-card {
+  width: min(540px, calc(100vw - 32px));
+  margin: 24vh auto 0;
   border: 1px solid var(--line);
   border-radius: 24px;
   padding: 20px 24px;
   background: var(--panel);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.28);
-}
-
-.editor-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  align-items: center;
-}
-
-.editor-header h1 {
-  margin: 4px 0 8px;
-  font-size: clamp(2rem, 5vw, 3.4rem);
 }
 
 .eyebrow {
@@ -73,52 +62,106 @@ button {
   font-size: 0.72rem;
 }
 
-.header-actions,
 .mode-grid,
 .chunk-grid,
 .segmented,
-.panel-row {
+.panel-row,
+.toolbar-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.editor-layout {
-  display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 18px;
-}
-
-.sidebar {
-  display: grid;
-  gap: 14px;
-}
-
-.panel,
-.canvas-panel {
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: var(--panel-strong);
-  padding: 18px;
-}
-
-.panel {
-  display: grid;
-  gap: 12px;
 }
 
 .canvas-panel {
   display: grid;
   gap: 12px;
   position: relative;
+  height: 100vh;
+  padding: 14px;
+}
+
+.canvas-panel-full {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .editor-canvas {
   width: 100%;
-  height: calc(100vh - 210px);
+  height: 100%;
   display: block;
   border-radius: 18px;
   background: linear-gradient(180deg, #173241, #0a1319);
+  touch-action: none;
+}
+
+.floating-toolbar {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+  width: min(360px, calc(100vw - 36px));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 12px;
+  background: rgba(7, 19, 26, 0.82);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+}
+
+.floating-toolbar[data-collapsed="true"] {
+  width: min(280px, calc(100vw - 36px));
+}
+
+.floating-toolbar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.floating-toolbar-head strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.toolbar-actions {
+  justify-content: flex-end;
+}
+
+.floating-toolbar-body {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.floating-toolbar-body::-webkit-scrollbar,
+.npc-list-compact::-webkit-scrollbar {
+  width: 8px;
+}
+
+.floating-toolbar-body::-webkit-scrollbar-thumb,
+.npc-list-compact::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+
+.compact-panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(14, 35, 43, 0.82);
+  display: grid;
+  gap: 10px;
+}
+
+.toolbar-status {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .compass-overlay {
@@ -234,7 +277,7 @@ button {
 .npc-row,
 .chunk-grid button,
 .segmented button,
-.panel button {
+.compact-panel button {
   border: 0;
   border-radius: 14px;
   padding: 10px 14px;
@@ -253,6 +296,15 @@ button {
   color: #ffd4cf;
 }
 
+.mode-button {
+  justify-content: space-between;
+  text-transform: capitalize;
+}
+
+.mode-button small {
+  color: var(--muted);
+}
+
 .mode-button[data-active="true"],
 .segmented button[data-active="true"],
 .npc-row[data-active="true"] {
@@ -269,10 +321,15 @@ button {
 
 .npc-list,
 .npc-editor,
-.patrol-editor,
 .point-list {
   display: grid;
   gap: 10px;
+}
+
+.npc-list-compact {
+  max-height: 150px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .npc-row,
@@ -305,24 +362,55 @@ select {
   font-size: 0.92rem;
 }
 
-@media (max-width: 1100px) {
-  .editor-layout {
-    grid-template-columns: 1fr;
-  }
+.legend-overlay {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: rgba(7, 19, 26, 0.72);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
 
-  .editor-canvas {
-    height: 60vh;
+.hotkey-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1100px) {
+  .floating-toolbar {
+    width: min(320px, calc(100vw - 28px));
   }
 }
 
 @media (max-width: 720px) {
-  .editor-page {
-    padding: 14px;
+  .canvas-panel {
+    padding: 10px;
   }
 
-  .editor-header {
+  .floating-toolbar {
+    top: 10px;
+    left: 10px;
+    width: min(100vw - 20px, 320px);
+  }
+
+  .floating-toolbar-head {
     flex-direction: column;
-    align-items: stretch;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .toolbar-actions button {
+    flex: 1 1 auto;
   }
 
   .legend {
@@ -330,13 +418,19 @@ select {
   }
 
   .compass-overlay {
-    top: 18px;
-    right: 18px;
+    top: 10px;
+    right: 10px;
     padding: 8px 10px;
   }
 
   .compass-ring {
     width: 60px;
     height: 60px;
+  }
+
+  .legend-overlay {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
   }
 }

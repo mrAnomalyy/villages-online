@@ -18,20 +18,36 @@ export type TerrainSceneBundle = {
   dispose: () => void;
 };
 
-function applyChunkHeights(core: BabylonCoreModule, chunk: TerrainChunkDTO, mesh: Mesh): void {
+type TerrainSceneOptions = {
+  dynamicTerrain?: boolean;
+  flatShaded?: boolean;
+};
+
+function applyChunkHeights(
+  core: BabylonCoreModule,
+  chunk: TerrainChunkDTO,
+  mesh: Mesh,
+  flatShaded: boolean
+): void {
   const positions = mesh.getVerticesData(core.VertexBuffer.PositionKind);
   if (!positions) {
     return;
   }
 
   for (let row = 0; row < chunk.heights.length; row += 1) {
+    const meshRow = chunk.heights.length - 1 - row;
     for (let column = 0; column < chunk.heights[row].length; column += 1) {
-      const vertex = row * chunk.heights[row].length + column;
+      const vertex = meshRow * chunk.heights[row].length + column;
       positions[vertex * 3 + 1] = chunk.heights[row][column];
     }
   }
 
   mesh.updateVerticesData(core.VertexBuffer.PositionKind, positions);
+  if (flatShaded) {
+    mesh.convertToFlatShadedMesh();
+    return;
+  }
+
   const normals = mesh.getVerticesData(core.VertexBuffer.NormalKind);
   const indices = mesh.getIndices();
   if (normals && indices) {
@@ -82,19 +98,25 @@ function createChunkVisual(
   chunk: TerrainChunkDTO,
   waterLevel: number,
   terrainMaterial: import("@babylonjs/core").StandardMaterial,
-  waterMaterial: import("@babylonjs/core").StandardMaterial
+  waterMaterial: import("@babylonjs/core").StandardMaterial,
+  options: Required<TerrainSceneOptions>
 ): TerrainChunkVisual {
   const { MeshBuilder } = core;
   const terrainMesh = MeshBuilder.CreateGround(
     `chunk-${chunk.id}`,
-    { width: chunk.size, height: chunk.size, subdivisions: chunk.size - 1 },
+    {
+      width: chunk.size,
+      height: chunk.size,
+      subdivisions: chunk.size - 1,
+      updatable: options.dynamicTerrain,
+    },
     scene
   );
   terrainMesh.position.x = chunk.x * chunk.size + chunk.size / 2;
   terrainMesh.position.z = chunk.z * chunk.size + chunk.size / 2;
   terrainMesh.metadata = { kind: "chunk", chunkId: chunk.id };
   terrainMesh.material = terrainMaterial;
-  applyChunkHeights(core, chunk, terrainMesh);
+  applyChunkHeights(core, chunk, terrainMesh, options.flatShaded);
 
   return {
     terrainMesh,
@@ -136,9 +158,14 @@ function chunksEqual(left: TerrainChunkDTO, right: TerrainChunkDTO): boolean {
 export function buildTerrainScene(
   core: BabylonCoreModule,
   scene: Scene,
-  map: Pick<MapAsset, "chunks" | "waterLevel">
+  map: Pick<MapAsset, "chunks" | "waterLevel">,
+  options: TerrainSceneOptions = {}
 ): TerrainSceneBundle {
-  const { Color3, MeshBuilder, StandardMaterial } = core;
+  const { Color3, StandardMaterial } = core;
+  const resolvedOptions: Required<TerrainSceneOptions> = {
+    dynamicTerrain: options.dynamicTerrain ?? false,
+    flatShaded: options.flatShaded ?? true,
+  };
   const terrainMaterial = new StandardMaterial("terrain", scene);
   terrainMaterial.diffuseColor = new Color3(0.39, 0.55, 0.33);
 
@@ -168,7 +195,15 @@ export function buildTerrainScene(
         if (!existingVisual) {
           chunkVisuals.set(
             chunk.id,
-            createChunkVisual(core, scene, chunk, nextMap.waterLevel, terrainMaterial, waterMaterial)
+            createChunkVisual(
+              core,
+              scene,
+              chunk,
+              nextMap.waterLevel,
+              terrainMaterial,
+              waterMaterial,
+              resolvedOptions
+            )
           );
           continue;
         }
@@ -178,15 +213,31 @@ export function buildTerrainScene(
         existingVisual.terrainMesh.metadata = { kind: "chunk", chunkId: chunk.id };
 
         if (!previousChunk || !chunksEqual(previousChunk, chunk)) {
-          applyChunkHeights(core, chunk, existingVisual.terrainMesh);
-          existingVisual.waterMeshes = syncChunkWaterMeshes(
-            core,
-            scene,
-            chunk,
-            nextMap.waterLevel,
-            waterMaterial,
-            existingVisual.waterMeshes
-          );
+          if (resolvedOptions.dynamicTerrain && !resolvedOptions.flatShaded) {
+            applyChunkHeights(core, chunk, existingVisual.terrainMesh, false);
+            existingVisual.waterMeshes = syncChunkWaterMeshes(
+              core,
+              scene,
+              chunk,
+              nextMap.waterLevel,
+              waterMaterial,
+              existingVisual.waterMeshes
+            );
+          } else {
+            disposeChunkVisual(existingVisual);
+            chunkVisuals.set(
+              chunk.id,
+              createChunkVisual(
+                core,
+                scene,
+                chunk,
+                nextMap.waterLevel,
+                terrainMaterial,
+                waterMaterial,
+                resolvedOptions
+              )
+            );
+          }
         } else if (previousMap && previousMap.waterLevel !== nextMap.waterLevel) {
           existingVisual.waterMeshes.forEach((mesh) => {
             mesh.position.y = nextMap.waterLevel + 0.05;

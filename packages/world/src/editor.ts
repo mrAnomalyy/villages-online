@@ -63,19 +63,42 @@ export function removeChunk(map: MapAsset, chunkId: string): MapAsset {
 
 export function sculptTerrain(
   map: MapAsset,
-  target: ChunkCellTarget & { delta: number; intensity: number }
+  target: ChunkCellTarget & {
+    localX: number;
+    localZ: number;
+    delta: number;
+    intensity: number;
+  }
 ): MapAsset {
-  return mapChunkCells(
-    map,
-    target,
-    (value, row, column) => {
-      const distance = Math.hypot(column - target.column, row - target.row);
-      const falloff = Math.max(0.2, 1 - distance / Math.max(target.radius, 1));
-      const nextHeight = Number(value) + target.delta * target.intensity * falloff;
-      return Math.max(0, Number(nextHeight.toFixed(2)));
-    },
-    "heights"
-  );
+  const next = cloneMapAsset(map);
+  const chunk = getChunkById(next, target.chunkId);
+  if (!chunk) {
+    return next;
+  }
+
+  const radius = Math.max(0.8, target.radius + 0.6);
+  const nextHeights = chunk.heights.map((row) => [...row]);
+  const sampleStep = chunk.size > 1 ? chunk.size / (chunk.size - 1) : 1;
+
+  for (let row = 0; row < chunk.size; row += 1) {
+    for (let column = 0; column < chunk.size; column += 1) {
+      const sampleX = column * sampleStep;
+      const sampleZ = row * sampleStep;
+      const distance = Math.hypot(sampleX - target.localX, sampleZ - target.localZ);
+      if (distance > radius) {
+        continue;
+      }
+
+      const normalized = distance / radius;
+      const falloff = Math.cos((normalized * Math.PI) / 2) ** 2;
+      const amount = target.delta * target.intensity * falloff;
+      nextHeights[row][column] = Math.max(0, Number((nextHeights[row][column] + amount).toFixed(2)));
+    }
+  }
+
+  chunk.heights = nextHeights;
+  next.bounds = computeMapBounds(next.chunks);
+  return next;
 }
 
 export function paintWater(

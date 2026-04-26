@@ -25,6 +25,8 @@ type TerrainPick = {
   chunkId: string;
   row: number;
   column: number;
+  localX: number;
+  localZ: number;
   worldX: number;
   worldY: number;
   worldZ: number;
@@ -120,6 +122,8 @@ export function MapEditorShell() {
           chunkId: pick.chunkId,
           row: pick.row,
           column: pick.column,
+          localX: pick.localX,
+          localZ: pick.localZ,
           radius: brushRadius,
           intensity: brushIntensity,
           delta: terrainDelta,

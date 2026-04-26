@@ -9,6 +9,8 @@ type TerrainPick = {
   chunkId: string;
   row: number;
   column: number;
+  localX: number;
+  localZ: number;
   worldX: number;
   worldY: number;
   worldZ: number;
@@ -194,15 +196,20 @@ export function EditorCanvas({
 
         const localX = pick.pickedPoint.x - chunk.x * chunk.size;
         const localZ = pick.pickedPoint.z - chunk.z * chunk.size;
-        const column = clamp(Math.floor(localX), 0, chunk.size - 1);
-        const row = clamp(Math.floor(localZ), 0, chunk.size - 1);
-        const worldX = chunk.x * chunk.size + column + 0.5;
-        const worldZ = chunk.z * chunk.size + row + 0.5;
+        const maxLocalCoordinate = Math.max(0, chunk.size - 1e-4);
+        const preciseLocalX = clamp(localX, 0, maxLocalCoordinate);
+        const preciseLocalZ = clamp(localZ, 0, maxLocalCoordinate);
+        const column = clamp(Math.floor(preciseLocalX), 0, chunk.size - 1);
+        const row = clamp(Math.floor(preciseLocalZ), 0, chunk.size - 1);
+        const worldX = chunk.x * chunk.size + preciseLocalX;
+        const worldZ = chunk.z * chunk.size + preciseLocalZ;
 
         onTerrainPickRef.current({
           chunkId: chunk.id,
           row,
           column,
+          localX: preciseLocalX,
+          localZ: preciseLocalZ,
           worldX,
           worldY: getHeightAt(activeMap, worldX, worldZ) + 1,
           worldZ,
@@ -235,14 +242,19 @@ export function EditorCanvas({
 
         const localX = pick.pickedPoint.x - chunk.x * chunk.size;
         const localZ = pick.pickedPoint.z - chunk.z * chunk.size;
-        const column = clamp(Math.floor(localX), 0, chunk.size - 1);
-        const row = clamp(Math.floor(localZ), 0, chunk.size - 1);
-        const worldX = chunk.x * chunk.size + column + 0.5;
-        const worldZ = chunk.z * chunk.size + row + 0.5;
+        const maxLocalCoordinate = Math.max(0, chunk.size - 1e-4);
+        const preciseLocalX = clamp(localX, 0, maxLocalCoordinate);
+        const preciseLocalZ = clamp(localZ, 0, maxLocalCoordinate);
+        const column = clamp(Math.floor(preciseLocalX), 0, chunk.size - 1);
+        const row = clamp(Math.floor(preciseLocalZ), 0, chunk.size - 1);
+        const worldX = chunk.x * chunk.size + preciseLocalX;
+        const worldZ = chunk.z * chunk.size + preciseLocalZ;
         hoverPickRef.current = {
           chunkId: chunk.id,
           row,
           column,
+          localX: preciseLocalX,
+          localZ: preciseLocalZ,
           worldX,
           worldY: getHeightAt(activeMap, worldX, worldZ) + 1,
           worldZ,
@@ -296,6 +308,9 @@ export function EditorCanvas({
       handles.terrainBundle = buildTerrainScene(handles.core, handles.scene, {
         chunks: activeMap.chunks,
         waterLevel: activeMap.waterLevel,
+      }, {
+        dynamicTerrain: true,
+        flatShaded: false,
       });
     } else {
       handles.terrainBundle.syncMap(activeMap, renderedMapRef.current ?? undefined);

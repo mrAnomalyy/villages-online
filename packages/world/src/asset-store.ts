@@ -1,10 +1,29 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { MapAsset } from "@villages/shared";
 import { parseMapAsset, TEST_MAP_ID } from "./map";
 
-const assetDirectory = fileURLToPath(new URL("../assets", import.meta.url));
+function resolveAssetDirectory(): string {
+  if (process.env.VILLAGES_WORLD_ASSETS_DIR) {
+    return process.env.VILLAGES_WORLD_ASSETS_DIR;
+  }
+
+  let currentDirectory = process.cwd();
+  while (true) {
+    const candidate = resolve(currentDirectory, "packages", "world", "assets");
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+
+    const parentDirectory = dirname(currentDirectory);
+    if (parentDirectory === currentDirectory) {
+      throw new Error("Unable to locate packages/world/assets from the current working directory.");
+    }
+    currentDirectory = parentDirectory;
+  }
+}
+
+const assetDirectory = resolveAssetDirectory();
 
 export function getPublishedMapAssetPath(mapId: string): string {
   return resolve(assetDirectory, `${mapId}.json`);

@@ -383,10 +383,6 @@ export function EditorCanvas({
         event.preventDefault();
       };
       const keydown = (event: KeyboardEvent) => {
-        if (event.defaultPrevented) {
-          return;
-        }
-
         const target = event.target;
         if (
           target instanceof HTMLElement &&
@@ -397,6 +393,10 @@ export function EditorCanvas({
 
         if (event.code === "Space") {
           spaceKeyDownRef.current = true;
+        }
+
+        if (event.defaultPrevented) {
+          return;
         }
 
         switch (event.code) {

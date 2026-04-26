@@ -14,6 +14,10 @@ type WorldBrushTarget = {
   radius: number;
 };
 
+function clampIndex(value: number, max: number): number {
+  return Math.max(0, Math.min(max, value));
+}
+
 function brushIntersectsChunk(
   worldX: number,
   worldZ: number,
@@ -51,9 +55,25 @@ function mapChunkCells(
     const cellSize = getChunkCellSize(chunk);
     const chunkOriginX = chunk.x * next.chunkSize;
     const chunkOriginZ = chunk.z * next.chunkSize;
+    const minColumn = clampIndex(
+      Math.floor((target.worldX - target.radius - chunkOriginX) / cellSize),
+      resolution - 1
+    );
+    const maxColumn = clampIndex(
+      Math.ceil((target.worldX + target.radius - chunkOriginX) / cellSize),
+      resolution - 1
+    );
+    const minRow = clampIndex(
+      Math.floor((target.worldZ - target.radius - chunkOriginZ) / cellSize),
+      resolution - 1
+    );
+    const maxRow = clampIndex(
+      Math.ceil((target.worldZ + target.radius - chunkOriginZ) / cellSize),
+      resolution - 1
+    );
 
-    for (let row = 0; row < resolution; row += 1) {
-      for (let column = 0; column < resolution; column += 1) {
+    for (let row = minRow; row <= maxRow; row += 1) {
+      for (let column = minColumn; column <= maxColumn; column += 1) {
         const sampleWorldX = chunkOriginX + (column + 0.5) * cellSize;
         const sampleWorldZ = chunkOriginZ + (row + 0.5) * cellSize;
         const distance = Math.hypot(sampleWorldX - target.worldX, sampleWorldZ - target.worldZ);
@@ -84,9 +104,25 @@ function sculptChunkTerrain(
   const chunkOriginX = chunk.x * map.chunkSize;
   const chunkOriginZ = chunk.z * map.chunkSize;
   const resolution = getChunkResolution(chunk);
+  const minColumn = clampIndex(
+    Math.floor((target.worldX - radius - chunkOriginX) / sampleStep),
+    resolution - 1
+  );
+  const maxColumn = clampIndex(
+    Math.ceil((target.worldX + radius - chunkOriginX) / sampleStep),
+    resolution - 1
+  );
+  const minRow = clampIndex(
+    Math.floor((target.worldZ - radius - chunkOriginZ) / sampleStep),
+    resolution - 1
+  );
+  const maxRow = clampIndex(
+    Math.ceil((target.worldZ + radius - chunkOriginZ) / sampleStep),
+    resolution - 1
+  );
 
-  for (let row = 0; row < resolution; row += 1) {
-    for (let column = 0; column < resolution; column += 1) {
+  for (let row = minRow; row <= maxRow; row += 1) {
+    for (let column = minColumn; column <= maxColumn; column += 1) {
       const sampleX = chunkOriginX + column * sampleStep;
       const sampleZ = chunkOriginZ + row * sampleStep;
       const distance = Math.hypot(sampleX - target.worldX, sampleZ - target.worldZ);

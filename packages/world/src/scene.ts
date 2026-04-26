@@ -24,6 +24,50 @@ type TerrainSceneOptions = {
   flatShaded?: boolean;
 };
 
+function chunkTopologyEqual(left: TerrainChunkDTO, right: TerrainChunkDTO): boolean {
+  return (
+    left.id === right.id &&
+    left.x === right.x &&
+    left.z === right.z &&
+    left.size === right.size &&
+    getChunkResolution(left) === getChunkResolution(right) &&
+    left.heights.length === right.heights.length &&
+    left.water.length === right.water.length
+  );
+}
+
+function heightsEqual(left: TerrainChunkDTO, right: TerrainChunkDTO): boolean {
+  if (!chunkTopologyEqual(left, right)) {
+    return false;
+  }
+
+  for (let row = 0; row < left.heights.length; row += 1) {
+    for (let column = 0; column < left.heights[row].length; column += 1) {
+      if (left.heights[row][column] !== right.heights[row][column]) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function waterEqual(left: TerrainChunkDTO, right: TerrainChunkDTO): boolean {
+  if (!chunkTopologyEqual(left, right)) {
+    return false;
+  }
+
+  for (let row = 0; row < left.water.length; row += 1) {
+    for (let column = 0; column < left.water[row].length; column += 1) {
+      if (left.water[row][column] !== right.water[row][column]) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 function applyChunkHeights(
   core: BabylonCoreModule,
   chunk: TerrainChunkDTO,
@@ -133,32 +177,6 @@ function disposeChunkVisual(visual: TerrainChunkVisual): void {
   visual.waterMeshes.forEach((mesh) => mesh.dispose());
 }
 
-function chunksEqual(left: TerrainChunkDTO, right: TerrainChunkDTO): boolean {
-  if (
-    left.id !== right.id ||
-    left.x !== right.x ||
-    left.z !== right.z ||
-    left.size !== right.size ||
-    left.heights.length !== right.heights.length ||
-    left.water.length !== right.water.length
-  ) {
-    return false;
-  }
-
-  for (let row = 0; row < left.heights.length; row += 1) {
-    for (let column = 0; column < left.heights[row].length; column += 1) {
-      if (left.heights[row][column] !== right.heights[row][column]) {
-        return false;
-      }
-      if (left.water[row][column] !== right.water[row][column]) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
 export function buildTerrainScene(
   core: BabylonCoreModule,
   scene: Scene,
@@ -216,17 +234,45 @@ export function buildTerrainScene(
         existingVisual.terrainMesh.position.z = chunk.z * chunk.size + chunk.size / 2;
         existingVisual.terrainMesh.metadata = { kind: "chunk", chunkId: chunk.id };
 
-        if (!previousChunk || !chunksEqual(previousChunk, chunk)) {
-          if (resolvedOptions.dynamicTerrain && !resolvedOptions.flatShaded) {
-            applyChunkHeights(core, chunk, existingVisual.terrainMesh, false);
-            existingVisual.waterMeshes = syncChunkWaterMeshes(
+        if (!previousChunk || !chunkTopologyEqual(previousChunk, chunk)) {
+          disposeChunkVisual(existingVisual);
+          chunkVisuals.set(
+            chunk.id,
+            createChunkVisual(
               core,
               scene,
               chunk,
               nextMap.waterLevel,
+              terrainMaterial,
               waterMaterial,
-              existingVisual.waterMeshes
-            );
+              resolvedOptions
+            )
+          );
+          continue;
+        }
+
+        const chunkHeightsChanged = !heightsEqual(previousChunk, chunk);
+        const chunkWaterChanged = !waterEqual(previousChunk, chunk);
+
+        if (chunkHeightsChanged || chunkWaterChanged) {
+          if (resolvedOptions.dynamicTerrain && !resolvedOptions.flatShaded) {
+            if (chunkHeightsChanged) {
+              applyChunkHeights(core, chunk, existingVisual.terrainMesh, false);
+            }
+            if (chunkWaterChanged) {
+              existingVisual.waterMeshes = syncChunkWaterMeshes(
+                core,
+                scene,
+                chunk,
+                nextMap.waterLevel,
+                waterMaterial,
+                existingVisual.waterMeshes
+              );
+            } else if (previousMap && previousMap.waterLevel !== nextMap.waterLevel) {
+              existingVisual.waterMeshes.forEach((mesh) => {
+                mesh.position.y = nextMap.waterLevel + 0.05;
+              });
+            }
           } else {
             disposeChunkVisual(existingVisual);
             chunkVisuals.set(

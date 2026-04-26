@@ -83,6 +83,7 @@ export function EditorCanvas({
     right: false,
   });
   const spaceKeyDownRef = useRef(false);
+  const setSpacebarPanningRef = useRef<(enabled: boolean) => void>(() => {});
 
   useEffect(() => {
     mapRef.current = map;
@@ -107,6 +108,7 @@ export function EditorCanvas({
   ]);
 
   useEffect(() => {
+    setSpacebarPanningRef.current(spacePressed);
     if (!spacePressed) {
       panningRef.current = false;
     }
@@ -167,9 +169,16 @@ export function EditorCanvas({
       camera.wheelPrecision = 8;
       camera.panningSensibility = 0;
       const pointerInput = camera.inputs.attached.pointers as { buttons?: number[] } | undefined;
-      if (pointerInput) {
-        pointerInput.buttons = [1, 2];
-      }
+      const setSpacebarPanning = (enabled: boolean) => {
+        if (pointerInput) {
+          pointerInput.buttons = enabled ? [0, 1, 2] : [1, 2];
+        }
+        camera._useCtrlForPanning = false;
+        camera._panningMouseButton = enabled ? 0 : 2;
+        camera.panningSensibility = enabled ? 280 : 0;
+      };
+      setSpacebarPanningRef.current = setSpacebarPanning;
+      setSpacebarPanning(false);
 
       const emitCameraHeading = () => {
         const forward = camera.target.subtract(camera.position);
@@ -215,7 +224,7 @@ export function EditorCanvas({
       syncScene(sceneHandlesRef.current);
       renderedMapRef.current = mapRef.current;
 
-      const getPointerPosition = (event: PointerEvent | MouseEvent) => {
+      const getPointerPosition = (event: MouseEvent) => {
         if (!canvasRef.current) {
           return { x: 0, y: 0 };
         }
@@ -225,6 +234,20 @@ export function EditorCanvas({
           x: event.clientX - rect.left,
           y: event.clientY - rect.top,
         };
+      };
+
+      const isInsideCanvas = (event: MouseEvent) => {
+        if (!canvasRef.current) {
+          return false;
+        }
+
+        const rect = canvasRef.current.getBoundingClientRect();
+        return (
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom
+        );
       };
 
       const resolveTerrainPick = (pointerX: number, pointerY: number): TerrainPick | null => {
@@ -293,15 +316,21 @@ export function EditorCanvas({
         camera.target.addInPlace(forward.scale(deltaY * scale));
       };
 
-      const handlePointerDown = (event: PointerEvent) => {
+      const handleMouseDown = (event: MouseEvent) => {
         if (event.button !== 0) {
+          return;
+        }
+
+        if (event.target !== canvasRef.current) {
+          return;
+        }
+
+        if (!isInsideCanvas(event)) {
           return;
         }
 
         event.preventDefault();
         canvasRef.current?.focus();
-        canvasRef.current?.setPointerCapture(event.pointerId);
-        leftPointerDownRef.current = true;
         const pointerPosition = getPointerPosition(event);
         lastPointerPositionRef.current = pointerPosition;
 
@@ -310,6 +339,7 @@ export function EditorCanvas({
           return;
         }
 
+        leftPointerDownRef.current = true;
         const pick = activeScene.pick(pointerPosition.x, pointerPosition.y);
         if (!pick?.hit || !pick.pickedMesh) {
           return;
@@ -336,7 +366,7 @@ export function EditorCanvas({
         lastPaintAtRef.current = performance.now();
       };
 
-      const handlePointerUp = (event: PointerEvent) => {
+      const handleMouseUp = (event: MouseEvent) => {
         if (event.button !== 0) {
           return;
         }
@@ -344,22 +374,27 @@ export function EditorCanvas({
         leftPointerDownRef.current = false;
         panningRef.current = false;
         lastPointerPositionRef.current = null;
-        if (canvasRef.current?.hasPointerCapture(event.pointerId)) {
-          canvasRef.current.releasePointerCapture(event.pointerId);
-        }
       };
 
-      const handlePointerMove = (event: PointerEvent) => {
+      const handleMouseMove = (event: MouseEvent) => {
         const pointerPosition = getPointerPosition(event);
-        if (leftPointerDownRef.current && isPanModifierActive()) {
-          panningRef.current = true;
+        const insideCanvas = isInsideCanvas(event);
+        const primaryButtonPressed = (event.buttons & 1) === 1;
+
+        if (!primaryButtonPressed && leftPointerDownRef.current) {
+          resetPointerState();
         }
 
-        if (panningRef.current && lastPointerPositionRef.current) {
-          const deltaX = pointerPosition.x - lastPointerPositionRef.current.x;
-          const deltaY = pointerPosition.y - lastPointerPositionRef.current.y;
-          panCamera(deltaX, deltaY);
-          lastPointerPositionRef.current = pointerPosition;
+        if (primaryButtonPressed && isPanModifierActive()) {
+          panningRef.current = true;
+          return;
+        }
+
+        if (!insideCanvas) {
+          if (!leftPointerDownRef.current) {
+            hoverPickRef.current = null;
+            syncBrushPreview();
+          }
           return;
         }
 
@@ -368,16 +403,15 @@ export function EditorCanvas({
         lastPointerPositionRef.current = pointerPosition;
       };
 
-      const pointerUp = () => {
+      const resetPointerState = () => {
         leftPointerDownRef.current = false;
         panningRef.current = false;
         lastPointerPositionRef.current = null;
       };
       const blur = () => {
-        leftPointerDownRef.current = false;
-        panningRef.current = false;
-        lastPointerPositionRef.current = null;
+        resetPointerState();
         spaceKeyDownRef.current = false;
+        setSpacebarPanning(false);
       };
       const wheel = (event: WheelEvent) => {
         event.preventDefault();
@@ -392,7 +426,9 @@ export function EditorCanvas({
         }
 
         if (event.code === "Space") {
+          event.preventDefault();
           spaceKeyDownRef.current = true;
+          setSpacebarPanning(true);
         }
 
         if (event.defaultPrevented) {
@@ -419,9 +455,8 @@ export function EditorCanvas({
       const keyup = (event: KeyboardEvent) => {
         if (event.code === "Space") {
           spaceKeyDownRef.current = false;
-          if (!spacePressedRef.current) {
-            panningRef.current = false;
-          }
+          panningRef.current = false;
+          setSpacebarPanning(false);
         }
 
         switch (event.code) {
@@ -448,16 +483,16 @@ export function EditorCanvas({
         movementKeysRef.current.left = false;
         movementKeysRef.current.right = false;
         spaceKeyDownRef.current = false;
+        setSpacebarPanning(false);
       };
 
-      canvasRef.current.addEventListener("pointerdown", handlePointerDown);
-      canvasRef.current.addEventListener("pointermove", handlePointerMove);
-      canvasRef.current.addEventListener("pointerup", handlePointerUp);
       canvasRef.current.addEventListener("wheel", wheel, { passive: false });
-      window.addEventListener("pointerup", pointerUp);
+      window.addEventListener("mousedown", handleMouseDown, true);
+      window.addEventListener("mousemove", handleMouseMove, true);
+      window.addEventListener("mouseup", handleMouseUp, true);
       window.addEventListener("blur", blur);
-      window.addEventListener("keydown", keydown);
-      window.addEventListener("keyup", keyup);
+      window.addEventListener("keydown", keydown, true);
+      window.addEventListener("keyup", keyup, true);
       window.addEventListener("resize", resize);
 
       engine.runRenderLoop(() => {
@@ -491,16 +526,16 @@ export function EditorCanvas({
       });
 
       return () => {
-        canvasRef.current?.removeEventListener("pointerdown", handlePointerDown);
-        canvasRef.current?.removeEventListener("pointermove", handlePointerMove);
-        canvasRef.current?.removeEventListener("pointerup", handlePointerUp);
         canvasRef.current?.removeEventListener("wheel", wheel);
-        window.removeEventListener("pointerup", pointerUp);
+        window.removeEventListener("mousedown", handleMouseDown, true);
+        window.removeEventListener("mousemove", handleMouseMove, true);
+        window.removeEventListener("mouseup", handleMouseUp, true);
         window.removeEventListener("blur", blur);
-        window.removeEventListener("keydown", keydown);
-        window.removeEventListener("keyup", keyup);
+        window.removeEventListener("keydown", keydown, true);
+        window.removeEventListener("keyup", keyup, true);
         window.removeEventListener("resize", resize);
         stopMovement();
+        setSpacebarPanningRef.current = () => {};
         camera.onViewMatrixChangedObservable.removeCallback(emitCameraHeading);
         sceneHandlesRef.current?.terrainBundle?.dispose();
         sceneHandlesRef.current?.npcMeshes.forEach((mesh) => mesh.dispose());

@@ -157,12 +157,12 @@ export function MapEditorShell() {
       setAltPressed(false);
     };
 
-    window.addEventListener("keydown", keydown);
-    window.addEventListener("keyup", keyup);
+    window.addEventListener("keydown", keydown, true);
+    window.addEventListener("keyup", keyup, true);
     window.addEventListener("blur", blur);
     return () => {
-      window.removeEventListener("keydown", keydown);
-      window.removeEventListener("keyup", keyup);
+      window.removeEventListener("keydown", keydown, true);
+      window.removeEventListener("keyup", keyup, true);
       window.removeEventListener("blur", blur);
     };
   }, []);

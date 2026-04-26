@@ -4,11 +4,21 @@
   "packageManager": "yarn@4.9.1",
   "workspaces": [
     "apps/*",
-    "packages/*",
-    "services/*"
+    "packages/*"
   ],
   "scripts": {
     "build": "yarn workspaces foreach -A run build",
+    "build:images": "node scripts/build-image.mjs prod all",
+    "build:editor": "node scripts/build-image.mjs prod editor",
+    "build:web": "node scripts/build-image.mjs prod web",
+    "build:gateway": "node scripts/build-image.mjs prod gateway",
+    "build:realm": "node scripts/build-image.mjs prod realm",
+    "build:dev:images": "node scripts/build-image.mjs dev all",
+    "build:dev:editor": "node scripts/build-image.mjs dev editor",
+    "build:dev:web": "node scripts/build-image.mjs dev web",
+    "build:dev:gateway": "node scripts/build-image.mjs dev gateway",
+    "build:dev:realm": "node scripts/build-image.mjs dev realm",
+    "dev": "docker compose up",
     "dev:editor": "yarn workspace editor dev",
     "dev:web": "yarn workspace web dev",
     "dev:gateway": "yarn workspace gateway dev",

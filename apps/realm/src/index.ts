@@ -1,4 +1,5 @@
 import http from "node:http";
+import { watchFile } from "node:fs";
 import express from "express";
 import Redis from "ioredis";
 import { Pool } from "pg";
@@ -10,7 +11,7 @@ import {
   type ServerSocketMessage,
 } from "@villages/shared";
 import { getChunksAroundPosition, getHeightAt, getNeighborChunks, TEST_MAP_ID } from "@villages/world";
-import { loadPublishedMapAsset } from "@villages/world/asset-store";
+import { getPublishedMapAssetPath, loadPublishedMapAsset } from "@villages/world/asset-store";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
 import type { PlayerEntity } from "./types";
 
@@ -21,7 +22,7 @@ const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgresql://villages:villages@127.0.0.1:5432/villages";
 const mapId = process.env.MAP_ID ?? TEST_MAP_ID;
-const worldMap = loadPublishedMapAsset(mapId);
+let worldMap = loadPublishedMapAsset(mapId);
 
 const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
 const pool = new Pool({ connectionString: databaseUrl });
@@ -51,7 +52,7 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 const players = new Map<string, PlayerEntity>();
 const sockets = new Map<string, WebSocket>();
-const visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
+let visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
 
 function asPlayerSnapshot(player: PlayerEntity) {
   return withChunk({
@@ -94,6 +95,47 @@ function broadcastSnapshots(): void {
     socket.send(JSON.stringify(payload));
   }
 }
+
+function sendChunksForPlayer(player: PlayerEntity, socket: WebSocket): void {
+  socket.send(
+    JSON.stringify({
+      type: "chunks",
+      chunks: getChunksAroundPosition(worldMap, player.position.x, player.position.z),
+    } satisfies ServerSocketMessage)
+  );
+}
+
+function reloadWorldMap(): void {
+  try {
+    const nextMap = loadPublishedMapAsset(mapId);
+    worldMap = nextMap;
+    visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
+
+    for (const [characterId, socket] of sockets.entries()) {
+      if (socket.readyState !== WebSocket.OPEN) {
+        continue;
+      }
+      const player = players.get(characterId);
+      if (player) {
+        sendChunksForPlayer(player, socket);
+      }
+    }
+
+    console.log(`[realm:${realmId}] reloaded map ${worldMap.mapId}`);
+  } catch (error) {
+    console.error(
+      `[realm:${realmId}] map reload failed: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
+  }
+}
+
+watchFile(getPublishedMapAssetPath(mapId), { interval: 500 }, (current, previous) => {
+  if (current.mtimeMs !== previous.mtimeMs || current.size !== previous.size) {
+    reloadWorldMap();
+  }
+});
 
 async function loadCharacter(characterId: string): Promise<PlayerEntity | null> {
   const result = await pool.query(
@@ -237,8 +279,12 @@ wss.on("connection", (socket) => {
     }
 
     if (message.type === "subscribeChunks") {
-      const chunks = getNeighborChunks(worldMap, message.centerChunkId);
-      socket.send(JSON.stringify({ type: "chunks", chunks } satisfies ServerSocketMessage));
+      socket.send(
+        JSON.stringify({
+          type: "chunks",
+          chunks: getNeighborChunks(worldMap, message.centerChunkId),
+        } satisfies ServerSocketMessage)
+      );
     }
   });
 

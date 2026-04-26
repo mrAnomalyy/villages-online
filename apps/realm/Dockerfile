@@ -4,8 +4,9 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY package.json .yarnrc.yml tsconfig.base.json vitest.config.ts playwright.config.ts ./
-COPY services/gateway/package.json ./services/gateway/package.json
+COPY package.json .yarnrc.yml tsconfig.base.json ./
+COPY .yarn ./.yarn
+COPY apps/realm/package.json ./apps/realm/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/world/package.json ./packages/world/package.json
 
@@ -13,7 +14,7 @@ RUN --mount=type=cache,target=/root/.yarn/berry/cache,id=villages-yarn-cache \
     YARN_CACHE_FOLDER=/root/.yarn/berry/cache yarn install
 
 COPY packages ./packages
-COPY services/gateway ./services/gateway
-RUN yarn workspace gateway build
+COPY apps/realm ./apps/realm
+RUN yarn workspace realm build
 
-CMD ["yarn", "workspace", "gateway", "start:tsx"]
+CMD ["yarn", "workspace", "realm", "start:tsx"]

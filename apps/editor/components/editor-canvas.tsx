@@ -24,6 +24,7 @@ type Props = {
   selectedNpcId: string | null;
   onTerrainPick: (pick: TerrainPick) => void;
   onNpcPick: (npcId: string) => void;
+  onCameraHeadingChange: (headingDegrees: number) => void;
 };
 
 type BabylonCoreModule = typeof import("@babylonjs/core");
@@ -54,6 +55,7 @@ export function EditorCanvas({
   selectedNpcId,
   onTerrainPick,
   onNpcPick,
+  onCameraHeadingChange,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mapRef = useRef(map);
@@ -63,6 +65,7 @@ export function EditorCanvas({
   const selectedNpcIdRef = useRef(selectedNpcId);
   const onTerrainPickRef = useRef(onTerrainPick);
   const onNpcPickRef = useRef(onNpcPick);
+  const onCameraHeadingChangeRef = useRef(onCameraHeadingChange);
   const sceneHandlesRef = useRef<SceneHandles | null>(null);
   const hoverPickRef = useRef<TerrainPick | null>(null);
   const renderedMapRef = useRef<MapAsset | null>(null);
@@ -75,7 +78,8 @@ export function EditorCanvas({
     selectedNpcIdRef.current = selectedNpcId;
     onTerrainPickRef.current = onTerrainPick;
     onNpcPickRef.current = onNpcPick;
-  }, [brushRadius, map, mode, onNpcPick, onTerrainPick, selectedChunkId, selectedNpcId]);
+    onCameraHeadingChangeRef.current = onCameraHeadingChange;
+  }, [brushRadius, map, mode, onCameraHeadingChange, onNpcPick, onTerrainPick, selectedChunkId, selectedNpcId]);
 
   useEffect(() => {
     const handles = sceneHandlesRef.current;
@@ -131,6 +135,15 @@ export function EditorCanvas({
       camera.lowerRadiusLimit = 18;
       camera.upperRadiusLimit = 72;
       camera.wheelPrecision = 50;
+
+      const emitCameraHeading = () => {
+        const forward = camera.target.subtract(camera.position);
+        const headingRadians = Math.atan2(forward.x, -forward.z);
+        const headingDegrees = (headingRadians * 180) / Math.PI;
+        onCameraHeadingChangeRef.current((headingDegrees + 360) % 360);
+      };
+      emitCameraHeading();
+      camera.onViewMatrixChangedObservable.add(emitCameraHeading);
 
       const light = new HemisphericLight("editor-light", new Vector3(0.2, 1, 0.1), activeScene);
       light.intensity = 1.2;
@@ -273,6 +286,7 @@ export function EditorCanvas({
 
       return () => {
         window.removeEventListener("resize", resize);
+        camera.onViewMatrixChangedObservable.removeCallback(emitCameraHeading);
         sceneHandlesRef.current?.terrainBundle?.dispose();
         sceneHandlesRef.current?.npcMeshes.forEach((mesh) => mesh.dispose());
         sceneHandlesRef.current?.chunkHighlight?.dispose();

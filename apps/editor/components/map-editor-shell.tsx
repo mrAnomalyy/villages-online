@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { MapAsset, MapNpcDefinition, NpcBehavior } from "@villages/shared";
 import {
   addChunk,
@@ -20,6 +20,7 @@ import { EditorCanvas } from "./editor-canvas";
 type Mode = "chunk" | "terrain" | "water" | "npc";
 
 const DEFAULT_MAP_ID = "starter-valley";
+const CARDINAL_DIRECTIONS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 
 type TerrainPick = {
   chunkId: string;
@@ -79,6 +80,7 @@ export function MapEditorShell() {
   const [status, setStatus] = useState("Loading published map...");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [cameraHeading, setCameraHeading] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -102,6 +104,10 @@ export function MapEditorShell() {
     () => map?.npcs.find((npc) => npc.id === selectedNpcId) ?? null,
     [map, selectedNpcId]
   );
+  const headingLabel = useMemo(() => {
+    const segment = Math.round(cameraHeading / 45) % CARDINAL_DIRECTIONS.length;
+    return CARDINAL_DIRECTIONS[segment];
+  }, [cameraHeading]);
 
   const applyMapUpdate = (nextMap: MapAsset, nextStatus: string) => {
     setMap(nextMap);
@@ -488,6 +494,19 @@ export function MapEditorShell() {
         </aside>
 
         <section className="canvas-panel">
+          <div className="compass-overlay" aria-live="polite">
+            <div className="compass-ring" style={{ "--compass-rotation": `${-cameraHeading}deg` } as CSSProperties}>
+              <span className="compass-mark compass-mark-n">N</span>
+              <span className="compass-mark compass-mark-e">E</span>
+              <span className="compass-mark compass-mark-s">S</span>
+              <span className="compass-mark compass-mark-w">W</span>
+              <span className="compass-needle" />
+            </div>
+            <div className="compass-readout">
+              <strong>{headingLabel}</strong>
+              <span>{Math.round(cameraHeading)}°</span>
+            </div>
+          </div>
           <EditorCanvas
             map={map}
             mode={mode}
@@ -500,6 +519,7 @@ export function MapEditorShell() {
               setMode("npc");
               setStatus(`Selected NPC ${npcId}.`);
             }}
+            onCameraHeadingChange={setCameraHeading}
           />
           <div className="legend">
             <span>Click terrain to select chunks or apply the active tool.</span>

@@ -110,6 +110,7 @@ button {
 .canvas-panel {
   display: grid;
   gap: 12px;
+  position: relative;
 }
 
 .editor-canvas {
@@ -118,6 +119,112 @@ button {
   display: block;
   border-radius: 18px;
   background: linear-gradient(180deg, #173241, #0a1319);
+}
+
+.compass-overlay {
+  position: absolute;
+  top: 26px;
+  right: 26px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(7, 19, 26, 0.78);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.26);
+  pointer-events: none;
+}
+
+.compass-ring {
+  --compass-rotation: 0deg;
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(circle at center, rgba(240, 169, 75, 0.16), transparent 55%),
+    rgba(255, 255, 255, 0.04);
+  transform: rotate(var(--compass-rotation));
+}
+
+.compass-mark,
+.compass-needle {
+  position: absolute;
+}
+
+.compass-mark {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.compass-mark-n {
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%) rotate(calc(var(--compass-rotation) * -1));
+  color: var(--accent-soft);
+}
+
+.compass-mark-e {
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%) rotate(calc(var(--compass-rotation) * -1));
+}
+
+.compass-mark-s {
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%) rotate(calc(var(--compass-rotation) * -1));
+}
+
+.compass-mark-w {
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%) rotate(calc(var(--compass-rotation) * -1));
+}
+
+.compass-needle {
+  top: 8px;
+  left: 50%;
+  width: 2px;
+  height: 28px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), rgba(240, 169, 75, 0.08));
+  box-shadow: 0 0 16px rgba(240, 169, 75, 0.35);
+}
+
+.compass-needle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #f7ead5;
+  box-shadow: 0 0 14px rgba(247, 234, 213, 0.45);
+}
+
+.compass-readout {
+  display: grid;
+  gap: 2px;
+  min-width: 46px;
+}
+
+.compass-readout strong {
+  font-size: 1rem;
+}
+
+.compass-readout span {
+  color: var(--muted);
+  font-size: 0.82rem;
 }
 
 .primary-button,
@@ -220,5 +327,16 @@ select {
 
   .legend {
     flex-direction: column;
+  }
+
+  .compass-overlay {
+    top: 18px;
+    right: 18px;
+    padding: 8px 10px;
+  }
+
+  .compass-ring {
+    width: 60px;
+    height: 60px;
   }
 }

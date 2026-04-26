@@ -82,6 +82,7 @@ export function EditorCanvas({
     left: false,
     right: false,
   });
+  const spaceKeyDownRef = useRef(false);
 
   useEffect(() => {
     mapRef.current = map;
@@ -273,6 +274,8 @@ export function EditorCanvas({
         };
       };
 
+      const isPanModifierActive = () => spacePressedRef.current || spaceKeyDownRef.current;
+
       const panCamera = (deltaX: number, deltaY: number, scaleMultiplier = 1) => {
         const forward = camera.target.subtract(camera.position);
         forward.y = 0;
@@ -281,12 +284,12 @@ export function EditorCanvas({
         }
 
         forward.normalize();
-        const right = new Vector3(forward.z, 0, -forward.x);
+        const right = new Vector3(-forward.z, 0, forward.x);
         const renderWidth = engine?.getRenderWidth() ?? 800;
         const renderHeight = engine?.getRenderHeight() ?? 800;
         const scale =
           (camera.radius / Math.max(320, Math.min(renderWidth, renderHeight))) * scaleMultiplier;
-        camera.target.addInPlace(right.scale(-deltaX * scale));
+        camera.target.addInPlace(right.scale(deltaX * scale));
         camera.target.addInPlace(forward.scale(deltaY * scale));
       };
 
@@ -302,7 +305,7 @@ export function EditorCanvas({
         const pointerPosition = getPointerPosition(event);
         lastPointerPositionRef.current = pointerPosition;
 
-        if (spacePressedRef.current) {
+        if (isPanModifierActive()) {
           panningRef.current = true;
           return;
         }
@@ -348,6 +351,10 @@ export function EditorCanvas({
 
       const handlePointerMove = (event: PointerEvent) => {
         const pointerPosition = getPointerPosition(event);
+        if (leftPointerDownRef.current && isPanModifierActive()) {
+          panningRef.current = true;
+        }
+
         if (panningRef.current && lastPointerPositionRef.current) {
           const deltaX = pointerPosition.x - lastPointerPositionRef.current.x;
           const deltaY = pointerPosition.y - lastPointerPositionRef.current.y;
@@ -370,6 +377,7 @@ export function EditorCanvas({
         leftPointerDownRef.current = false;
         panningRef.current = false;
         lastPointerPositionRef.current = null;
+        spaceKeyDownRef.current = false;
       };
       const wheel = (event: WheelEvent) => {
         event.preventDefault();
@@ -385,6 +393,10 @@ export function EditorCanvas({
           target.closest("input, textarea, select, [contenteditable='true']")
         ) {
           return;
+        }
+
+        if (event.code === "Space") {
+          spaceKeyDownRef.current = true;
         }
 
         switch (event.code) {
@@ -405,6 +417,13 @@ export function EditorCanvas({
         }
       };
       const keyup = (event: KeyboardEvent) => {
+        if (event.code === "Space") {
+          spaceKeyDownRef.current = false;
+          if (!spacePressedRef.current) {
+            panningRef.current = false;
+          }
+        }
+
         switch (event.code) {
           case "KeyW":
             movementKeysRef.current.forward = false;
@@ -428,6 +447,7 @@ export function EditorCanvas({
         movementKeysRef.current.backward = false;
         movementKeysRef.current.left = false;
         movementKeysRef.current.right = false;
+        spaceKeyDownRef.current = false;
       };
 
       canvasRef.current.addEventListener("pointerdown", handlePointerDown);
@@ -445,8 +465,8 @@ export function EditorCanvas({
         if (movement.forward || movement.backward || movement.left || movement.right) {
           const deltaSeconds = engine?.getDeltaTime() ? (engine.getDeltaTime() / 1000) : 0.016;
           const speed = Math.max(14, camera.radius * 0.9) * deltaSeconds;
-          const horizontal = (movement.right ? 1 : 0) - (movement.left ? 1 : 0);
-          const vertical = (movement.backward ? 1 : 0) - (movement.forward ? 1 : 0);
+          const horizontal = (movement.left ? 1 : 0) - (movement.right ? 1 : 0);
+          const vertical = (movement.forward ? 1 : 0) - (movement.backward ? 1 : 0);
           if (horizontal !== 0 || vertical !== 0) {
             panCamera(horizontal, vertical, speed);
           }

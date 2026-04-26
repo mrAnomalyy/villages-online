@@ -486,6 +486,8 @@ export function MapEditorShell() {
         <section className="canvas-panel">
           <EditorCanvas
             map={map}
+            mode={mode}
+            brushRadius={brushRadius}
             selectedChunkId={selectedChunkId}
             selectedNpcId={selectedNpcId}
             onTerrainPick={handleTerrainPick}

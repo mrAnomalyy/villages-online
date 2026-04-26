@@ -127,13 +127,13 @@ export function EditorCanvas({
         "editor-camera",
         -Math.PI / 4,
         1,
-        38,
+        Math.max(38, map.chunkSize * 0.95),
         new Vector3(map.chunkSize / 2, 0, map.chunkSize / 2),
         activeScene
       );
       camera.attachControl(canvasRef.current, true);
-      camera.lowerRadiusLimit = 18;
-      camera.upperRadiusLimit = 72;
+      camera.lowerRadiusLimit = Math.max(24, map.chunkSize * 0.25);
+      camera.upperRadiusLimit = Math.max(96, map.chunkSize * 3);
       camera.wheelPrecision = 50;
 
       const emitCameraHeading = () => {

@@ -13,7 +13,7 @@ describe("map asset loading", () => {
 
   it("resolves chunk ids from world positions", () => {
     expect(resolveChunkIdForPosition(8, 8)).toBe("0:0");
-    expect(resolveChunkIdForPosition(17, 9)).toBe("1:0");
+    expect(resolveChunkIdForPosition(129, 9)).toBe("1:0");
   });
 
   it("returns neighboring chunks in bounds", () => {
@@ -23,9 +23,9 @@ describe("map asset loading", () => {
 
   it("reads terrain heights and water masks", () => {
     const map = loadPublishedMapAsset();
-    expect(getHeightAt(map, 7, 7)).toBeGreaterThan(getHeightAt(map, 2, 12));
-    expect(getWaterAt(map, 5, 13)).toBe(true);
-    expect(getWaterAt(map, 5, 5)).toBe(false);
+    expect(getHeightAt(map, 56, 56)).toBeGreaterThan(getHeightAt(map, 16, 104));
+    expect(getWaterAt(map, 40, 110)).toBe(true);
+    expect(getWaterAt(map, 40, 40)).toBe(false);
   });
 
   it("rejects invalid chunk shapes", () => {

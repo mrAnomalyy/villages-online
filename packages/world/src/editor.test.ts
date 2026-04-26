@@ -15,50 +15,57 @@ describe("editor map mutations", () => {
 
   it("sculpts terrain up and down", () => {
     const map = loadPublishedMapAsset();
+    const targetRow = 28;
+    const targetColumn = 28;
     const raised = sculptTerrain(map, {
-      worldX: 7.5,
-      worldZ: 7.5,
+      worldX: 56,
+      worldZ: 56,
       radius: 1,
       delta: 1,
       intensity: 2,
     });
-    expect(raised.chunks[0].heights[7][7]).toBeGreaterThan(map.chunks[0].heights[7][7]);
+    expect(raised.chunks[0].heights[targetRow][targetColumn]).toBeGreaterThan(
+      map.chunks[0].heights[targetRow][targetColumn]
+    );
 
     const lowered = sculptTerrain(raised, {
-      worldX: 7.5,
-      worldZ: 7.5,
+      worldX: 56,
+      worldZ: 56,
       radius: 1,
       delta: -1,
       intensity: 2,
     });
-    expect(lowered.chunks[0].heights[7][7]).toBeLessThan(raised.chunks[0].heights[7][7]);
+    expect(lowered.chunks[0].heights[targetRow][targetColumn]).toBeLessThan(
+      raised.chunks[0].heights[targetRow][targetColumn]
+    );
   });
 
   it("paints and clears water", () => {
     const map = loadPublishedMapAsset();
     const painted = paintWater(map, {
-      worldX: 4.5,
-      worldZ: 4.5,
+      worldX: 5,
+      worldZ: 5,
       radius: 0,
       value: true,
     });
-    expect(painted.chunks[0].water[4][4]).toBe(true);
+    expect(painted.chunks[0].water[2][2]).toBe(true);
 
     const cleared = paintWater(painted, {
-      worldX: 4.5,
-      worldZ: 12.5,
+      worldX: 5,
+      worldZ: 111,
       radius: 0,
       value: false,
     });
-    expect(cleared.chunks[0].water[12][4]).toBe(false);
+    expect(cleared.chunks[0].water[55][2]).toBe(false);
   });
 
   it("sculpts across chunk boundaries", () => {
-    const map = removeChunk(addChunk(loadPublishedMapAsset(), 1, 0), "0:0");
-    const seeded = addChunk(map, 0, 0);
-    const sculpted = sculptTerrain(seeded, {
-      worldX: seeded.chunkSize - 0.25,
-      worldZ: seeded.chunkSize / 2,
+    const map = addChunk(loadPublishedMapAsset(), 1, 0);
+    const beforeLeft = JSON.stringify(map.chunks.find((chunk) => chunk.id === "0:0")?.heights);
+    const beforeRight = JSON.stringify(map.chunks.find((chunk) => chunk.id === "1:0")?.heights);
+    const sculpted = sculptTerrain(map, {
+      worldX: map.chunkSize - 0.25,
+      worldZ: map.chunkSize / 2,
       radius: 2,
       delta: 1,
       intensity: 2,
@@ -66,8 +73,8 @@ describe("editor map mutations", () => {
 
     const leftChunk = sculpted.chunks.find((chunk) => chunk.id === "0:0");
     const rightChunk = sculpted.chunks.find((chunk) => chunk.id === "1:0");
-    expect(leftChunk?.heights.some((row) => row.some((value) => value > 1))).toBe(true);
-    expect(rightChunk?.heights.some((row) => row.some((value) => value > 1))).toBe(true);
+    expect(JSON.stringify(leftChunk?.heights)).not.toBe(beforeLeft);
+    expect(JSON.stringify(rightChunk?.heights)).not.toBe(beforeRight);
   });
 
   it("creates, updates, and deletes NPCs", () => {

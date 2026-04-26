@@ -1,5 +1,6 @@
 import type { Mesh, Scene } from "@babylonjs/core";
 import type { MapAsset, TerrainChunkDTO } from "@villages/shared";
+import { getChunkCellSize, getChunkResolution } from "./map";
 
 type BabylonCoreModule = typeof import("@babylonjs/core");
 
@@ -69,19 +70,21 @@ function syncChunkWaterMeshes(
 
   const { MeshBuilder } = core;
   const nextWaterMeshes: Mesh[] = [];
-  for (let row = 0; row < chunk.size; row += 1) {
-    for (let column = 0; column < chunk.size; column += 1) {
+  const resolution = getChunkResolution(chunk);
+  const cellSize = getChunkCellSize(chunk);
+  for (let row = 0; row < resolution; row += 1) {
+    for (let column = 0; column < resolution; column += 1) {
       if (!chunk.water[row][column]) {
         continue;
       }
 
       const waterMesh = MeshBuilder.CreateGround(
         `water-${chunk.id}-${row}-${column}`,
-        { width: 1, height: 1, subdivisions: 1 },
+        { width: cellSize, height: cellSize, subdivisions: 1 },
         scene
       );
-      waterMesh.position.x = chunk.x * chunk.size + column + 0.5;
-      waterMesh.position.z = chunk.z * chunk.size + row + 0.5;
+      waterMesh.position.x = chunk.x * chunk.size + (column + 0.5) * cellSize;
+      waterMesh.position.z = chunk.z * chunk.size + (row + 0.5) * cellSize;
       waterMesh.position.y = waterLevel + 0.05;
       waterMesh.material = waterMaterial;
       waterMesh.isPickable = false;
@@ -102,12 +105,13 @@ function createChunkVisual(
   options: Required<TerrainSceneOptions>
 ): TerrainChunkVisual {
   const { MeshBuilder } = core;
+  const resolution = getChunkResolution(chunk);
   const terrainMesh = MeshBuilder.CreateGround(
     `chunk-${chunk.id}`,
     {
       width: chunk.size,
       height: chunk.size,
-      subdivisions: chunk.size - 1,
+      subdivisions: resolution - 1,
       updatable: options.dynamicTerrain,
     },
     scene

@@ -28,12 +28,18 @@ describe("terrain scene mesh mapping", () => {
     const scene = new Scene(engine);
 
     try {
-      const chunk = createEmptyChunk(0, 0, 4, 0);
+      const chunk = createEmptyChunk(0, 0, 4, 4, 0);
       chunk.heights = [
         [10, 11, 12, 13],
         [20, 21, 22, 23],
         [30, 31, 32, 33],
         [40, 41, 42, 43],
+      ];
+      chunk.water = [
+        [false, false, false, false],
+        [false, false, false, false],
+        [false, false, false, false],
+        [false, false, false, false],
       ];
 
       const terrain = buildTerrainScene(

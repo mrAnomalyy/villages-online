@@ -125,11 +125,8 @@ export function MapEditorShell() {
     if (mode === "terrain") {
       applyMapUpdate(
         sculptTerrain(map, {
-          chunkId: pick.chunkId,
-          row: pick.row,
-          column: pick.column,
-          localX: pick.localX,
-          localZ: pick.localZ,
+          worldX: pick.worldX,
+          worldZ: pick.worldZ,
           radius: brushRadius,
           intensity: brushIntensity,
           delta: terrainDelta,
@@ -142,9 +139,8 @@ export function MapEditorShell() {
     if (mode === "water") {
       applyMapUpdate(
         paintWater(map, {
-          chunkId: pick.chunkId,
-          row: pick.row,
-          column: pick.column,
+          worldX: pick.worldX,
+          worldZ: pick.worldZ,
           radius: brushRadius,
           value: paintWaterValue,
         }),

@@ -1,4 +1,10 @@
-import { CHUNK_SIZE, type MapAsset, type MapNpcDefinition, type TerrainChunkDTO } from "@villages/shared";
+import {
+  CHUNK_RESOLUTION,
+  CHUNK_SIZE,
+  type MapAsset,
+  type MapNpcDefinition,
+  type TerrainChunkDTO,
+} from "@villages/shared";
 
 export const TEST_MAP_ID = "starter-valley";
 export const MAP_ASSET_VERSION = 1;
@@ -15,6 +21,7 @@ export function createEmptyChunk(
   x: number,
   z: number,
   size: number,
+  resolution = CHUNK_RESOLUTION,
   height = 1
 ): TerrainChunkDTO {
   return {
@@ -22,9 +29,23 @@ export function createEmptyChunk(
     x,
     z,
     size,
-    heights: Array.from({ length: size }, () => Array.from({ length: size }, () => height)),
-    water: createWaterMask(size),
+    resolution,
+    heights: Array.from({ length: resolution }, () => Array.from({ length: resolution }, () => height)),
+    water: createWaterMask(resolution),
   };
+}
+
+export function getChunkResolution(chunk: TerrainChunkDTO): number {
+  return chunk.resolution;
+}
+
+export function getChunkSampleStep(chunk: TerrainChunkDTO): number {
+  const resolution = getChunkResolution(chunk);
+  return resolution > 1 ? chunk.size / (resolution - 1) : chunk.size;
+}
+
+export function getChunkCellSize(chunk: TerrainChunkDTO): number {
+  return chunk.size / getChunkResolution(chunk);
 }
 
 export function computeMapBounds(chunks: TerrainChunkDTO[]): MapAsset["bounds"] {
@@ -92,7 +113,7 @@ function parseMatrix<T extends number | boolean>(
   });
 }
 
-function parseChunk(value: unknown, chunkSize: number): TerrainChunkDTO {
+function parseChunk(value: unknown, chunkSize: number, defaultResolution: number): TerrainChunkDTO {
   if (!isRecord(value)) {
     throw new Error("chunk must be an object.");
   }
@@ -104,8 +125,16 @@ function parseChunk(value: unknown, chunkSize: number): TerrainChunkDTO {
     throw new Error(`chunk ${x}:${z} size must match map chunk size ${chunkSize}.`);
   }
 
-  const heights = parseMatrix(value.heights, size, `chunk ${x}:${z} heights`, asNumber);
-  const water = parseMatrix(value.water, size, `chunk ${x}:${z} water`, (entry, entryLabel) => {
+  const matrixSize = Array.isArray(value.heights) ? value.heights.length : defaultResolution;
+  const resolution = value.resolution === undefined
+    ? matrixSize
+    : asNumber(value.resolution, "chunk.resolution");
+  if (resolution <= 0 || !Number.isInteger(resolution)) {
+    throw new Error(`chunk ${x}:${z} resolution must be a positive integer.`);
+  }
+
+  const heights = parseMatrix(value.heights, resolution, `chunk ${x}:${z} heights`, asNumber);
+  const water = parseMatrix(value.water, resolution, `chunk ${x}:${z} water`, (entry, entryLabel) => {
     if (typeof entry !== "boolean") {
       throw new Error(`${entryLabel} must be boolean.`);
     }
@@ -117,6 +146,7 @@ function parseChunk(value: unknown, chunkSize: number): TerrainChunkDTO {
     x,
     z,
     size,
+    resolution,
     heights,
     water,
   };
@@ -181,8 +211,23 @@ export function parseMapAsset(value: unknown): MapAsset {
   }
 
   const chunkSize = asNumber(value.chunkSize, "chunkSize");
+  const inferredChunkResolution =
+    Array.isArray(value.chunks) &&
+    value.chunks[0] &&
+    typeof value.chunks[0] === "object" &&
+    value.chunks[0] !== null &&
+    Array.isArray((value.chunks[0] as Record<string, unknown>).heights)
+      ? ((value.chunks[0] as Record<string, unknown>).heights as unknown[]).length
+      : CHUNK_RESOLUTION;
+  const chunkResolution =
+    value.chunkResolution === undefined
+      ? inferredChunkResolution
+      : asNumber(value.chunkResolution, "chunkResolution");
+  if (chunkResolution <= 0 || !Number.isInteger(chunkResolution)) {
+    throw new Error("chunkResolution must be a positive integer.");
+  }
   const chunks = Array.isArray(value.chunks)
-    ? value.chunks.map((chunk) => parseChunk(chunk, chunkSize))
+    ? value.chunks.map((chunk) => parseChunk(chunk, chunkSize, chunkResolution))
     : (() => {
         throw new Error("chunks must be an array.");
       })();
@@ -212,6 +257,7 @@ export function parseMapAsset(value: unknown): MapAsset {
     mapId: asString(value.mapId, "mapId"),
     name: asString(value.name, "name"),
     chunkSize,
+    chunkResolution,
     waterLevel: asNumber(value.waterLevel, "waterLevel"),
     bounds: computeMapBounds(chunks),
     chunks,
@@ -229,8 +275,10 @@ export function cloneMapAsset(map: MapAsset): MapAsset {
   return {
     ...map,
     bounds: { ...map.bounds },
+    chunkResolution: map.chunkResolution,
     chunks: map.chunks.map((chunk) => ({
       ...chunk,
+      resolution: chunk.resolution,
       heights: chunk.heights.map((row) => [...row]),
       water: chunk.water.map((row) => [...row]),
     })),
@@ -290,9 +338,25 @@ export function getHeightAt(map: MapAsset, x: number, z: number): number {
     return 0;
   }
 
-  const localColumn = Math.max(0, Math.min(chunk.size - 1, Math.floor(x - chunk.x * map.chunkSize)));
-  const localRow = Math.max(0, Math.min(chunk.size - 1, Math.floor(z - chunk.z * map.chunkSize)));
-  return chunk.heights[localRow][localColumn];
+  const resolution = getChunkResolution(chunk);
+  if (resolution === 1) {
+    return chunk.heights[0][0];
+  }
+
+  const localX = x - chunk.x * map.chunkSize;
+  const localZ = z - chunk.z * map.chunkSize;
+  const sampleX = Math.max(0, Math.min(resolution - 1, (localX / chunk.size) * (resolution - 1)));
+  const sampleZ = Math.max(0, Math.min(resolution - 1, (localZ / chunk.size) * (resolution - 1)));
+  const left = Math.floor(sampleX);
+  const top = Math.floor(sampleZ);
+  const right = Math.min(left + 1, resolution - 1);
+  const bottom = Math.min(top + 1, resolution - 1);
+  const blendX = sampleX - left;
+  const blendZ = sampleZ - top;
+  const topHeight = chunk.heights[top][left] * (1 - blendX) + chunk.heights[top][right] * blendX;
+  const bottomHeight =
+    chunk.heights[bottom][left] * (1 - blendX) + chunk.heights[bottom][right] * blendX;
+  return topHeight * (1 - blendZ) + bottomHeight * blendZ;
 }
 
 export function getWaterAt(map: MapAsset, x: number, z: number): boolean {
@@ -303,7 +367,16 @@ export function getWaterAt(map: MapAsset, x: number, z: number): boolean {
     return false;
   }
 
-  const localColumn = Math.max(0, Math.min(chunk.size - 1, Math.floor(x - chunk.x * map.chunkSize)));
-  const localRow = Math.max(0, Math.min(chunk.size - 1, Math.floor(z - chunk.z * map.chunkSize)));
+  const resolution = getChunkResolution(chunk);
+  const localX = x - chunk.x * map.chunkSize;
+  const localZ = z - chunk.z * map.chunkSize;
+  const localColumn = Math.max(
+    0,
+    Math.min(resolution - 1, Math.floor((localX / chunk.size) * resolution))
+  );
+  const localRow = Math.max(
+    0,
+    Math.min(resolution - 1, Math.floor((localZ / chunk.size) * resolution))
+  );
   return chunk.water[localRow][localColumn];
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { MapAsset } from "@villages/shared";
 import type { Engine, Mesh, Scene } from "@babylonjs/core";
-import { buildTerrainScene, getChunkAt, getHeightAt } from "@villages/world";
+import { buildTerrainScene, getChunkAt, getChunkResolution, getHeightAt } from "@villages/world";
 
 type TerrainPick = {
   chunkId: string;
@@ -209,11 +209,14 @@ export function EditorCanvas({
 
         const localX = pick.pickedPoint.x - chunk.x * chunk.size;
         const localZ = pick.pickedPoint.z - chunk.z * chunk.size;
+        const resolution = getChunkResolution(chunk);
         const maxLocalCoordinate = Math.max(0, chunk.size - 1e-4);
         const preciseLocalX = clamp(localX, 0, maxLocalCoordinate);
         const preciseLocalZ = clamp(localZ, 0, maxLocalCoordinate);
-        const column = clamp(Math.floor(preciseLocalX), 0, chunk.size - 1);
-        const row = clamp(Math.floor(preciseLocalZ), 0, chunk.size - 1);
+        const sampleX = (preciseLocalX / chunk.size) * (resolution - 1);
+        const sampleZ = (preciseLocalZ / chunk.size) * (resolution - 1);
+        const column = clamp(Math.floor(sampleX), 0, resolution - 1);
+        const row = clamp(Math.floor(sampleZ), 0, resolution - 1);
         const worldX = chunk.x * chunk.size + preciseLocalX;
         const worldZ = chunk.z * chunk.size + preciseLocalZ;
 
@@ -255,11 +258,14 @@ export function EditorCanvas({
 
         const localX = pick.pickedPoint.x - chunk.x * chunk.size;
         const localZ = pick.pickedPoint.z - chunk.z * chunk.size;
+        const resolution = getChunkResolution(chunk);
         const maxLocalCoordinate = Math.max(0, chunk.size - 1e-4);
         const preciseLocalX = clamp(localX, 0, maxLocalCoordinate);
         const preciseLocalZ = clamp(localZ, 0, maxLocalCoordinate);
-        const column = clamp(Math.floor(preciseLocalX), 0, chunk.size - 1);
-        const row = clamp(Math.floor(preciseLocalZ), 0, chunk.size - 1);
+        const sampleX = (preciseLocalX / chunk.size) * (resolution - 1);
+        const sampleZ = (preciseLocalZ / chunk.size) * (resolution - 1);
+        const column = clamp(Math.floor(sampleX), 0, resolution - 1);
+        const row = clamp(Math.floor(sampleZ), 0, resolution - 1);
         const worldX = chunk.x * chunk.size + preciseLocalX;
         const worldZ = chunk.z * chunk.size + preciseLocalZ;
         hoverPickRef.current = {

@@ -51,6 +51,7 @@ export type TerrainChunkDTO = {
   x: number;
   z: number;
   size: number;
+  resolution: number;
   heights: number[][];
   water: WaterMask;
 };
@@ -90,6 +91,7 @@ export type MapAsset = {
   mapId: string;
   name: string;
   chunkSize: number;
+  chunkResolution: number;
   waterLevel: number;
   bounds: MapBounds;
   chunks: TerrainChunkDTO[];
@@ -166,7 +168,8 @@ export const PLAYER_SPEED = 6;
 export const JUMP_VELOCITY = 7;
 export const GRAVITY = 18;
 export const TICK_RATE = 10;
-export const CHUNK_SIZE = 16;
+export const CHUNK_SIZE = 128;
+export const CHUNK_RESOLUTION = 64;
 
 export function sanitizeNickname(value: string): string {
   return value.trim().replace(/\s+/g, " ");

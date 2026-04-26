@@ -35,6 +35,7 @@ describe("map asset loading", () => {
         mapId: "broken",
         name: "Broken",
         chunkSize: 16,
+        chunkResolution: 16,
         waterLevel: 0.5,
         chunks: [
           {
@@ -42,6 +43,7 @@ describe("map asset loading", () => {
             x: 0,
             z: 0,
             size: 16,
+            resolution: 16,
             heights: [[1]],
             water: [[false]],
           },

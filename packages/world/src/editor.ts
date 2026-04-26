@@ -1,35 +1,70 @@
 import type { MapAsset, MapNpcDefinition, NpcBehavior, Vector3Like } from "@villages/shared";
-import { cloneMapAsset, computeMapBounds, createEmptyChunk, getChunkById } from "./map";
+import {
+  cloneMapAsset,
+  computeMapBounds,
+  createEmptyChunk,
+  getChunkCellSize,
+  getChunkResolution,
+  getChunkSampleStep,
+} from "./map";
 
-type ChunkCellTarget = {
-  chunkId: string;
-  row: number;
-  column: number;
+type WorldBrushTarget = {
+  worldX: number;
+  worldZ: number;
   radius: number;
 };
 
+function brushIntersectsChunk(
+  worldX: number,
+  worldZ: number,
+  radius: number,
+  map: MapAsset,
+  chunk: MapAsset["chunks"][number]
+): boolean {
+  const minX = chunk.x * map.chunkSize;
+  const minZ = chunk.z * map.chunkSize;
+  const maxX = minX + chunk.size;
+  const maxZ = minZ + chunk.size;
+  const nearestX = Math.max(minX, Math.min(maxX, worldX));
+  const nearestZ = Math.max(minZ, Math.min(maxZ, worldZ));
+  return Math.hypot(nearestX - worldX, nearestZ - worldZ) <= radius;
+}
+
 function mapChunkCells(
   map: MapAsset,
-  target: ChunkCellTarget,
-  update: (value: number | boolean, row: number, column: number) => number | boolean,
+  target: WorldBrushTarget,
+  update: (
+    value: number | boolean,
+    row: number,
+    column: number,
+    chunk: MapAsset["chunks"][number]
+  ) => number | boolean,
   key: "heights" | "water"
 ): MapAsset {
   const next = cloneMapAsset(map);
-  const chunk = getChunkById(next, target.chunkId);
-  if (!chunk) {
-    return next;
-  }
+  for (const chunk of next.chunks) {
+    if (!brushIntersectsChunk(target.worldX, target.worldZ, target.radius, next, chunk)) {
+      continue;
+    }
 
-  for (let row = 0; row < chunk.size; row += 1) {
-    for (let column = 0; column < chunk.size; column += 1) {
-      const distance = Math.hypot(column - target.column, row - target.row);
-      if (distance > target.radius) {
-        continue;
-      }
-      if (key === "heights") {
-        chunk.heights[row][column] = update(chunk.heights[row][column], row, column) as number;
-      } else {
-        chunk.water[row][column] = update(chunk.water[row][column], row, column) as boolean;
+    const resolution = getChunkResolution(chunk);
+    const cellSize = getChunkCellSize(chunk);
+    const chunkOriginX = chunk.x * next.chunkSize;
+    const chunkOriginZ = chunk.z * next.chunkSize;
+
+    for (let row = 0; row < resolution; row += 1) {
+      for (let column = 0; column < resolution; column += 1) {
+        const sampleWorldX = chunkOriginX + (column + 0.5) * cellSize;
+        const sampleWorldZ = chunkOriginZ + (row + 0.5) * cellSize;
+        const distance = Math.hypot(sampleWorldX - target.worldX, sampleWorldZ - target.worldZ);
+        if (distance > target.radius) {
+          continue;
+        }
+        if (key === "heights") {
+          chunk.heights[row][column] = update(chunk.heights[row][column], row, column, chunk) as number;
+        } else {
+          chunk.water[row][column] = update(chunk.water[row][column], row, column, chunk) as boolean;
+        }
       }
     }
   }
@@ -38,13 +73,44 @@ function mapChunkCells(
   return next;
 }
 
+function sculptChunkTerrain(
+  chunk: MapAsset["chunks"][number],
+  map: MapAsset,
+  target: WorldBrushTarget & { delta: number; intensity: number }
+): void {
+  const radius = Math.max(0.8, target.radius + 0.6);
+  const nextHeights = chunk.heights.map((row) => [...row]);
+  const sampleStep = getChunkSampleStep(chunk);
+  const chunkOriginX = chunk.x * map.chunkSize;
+  const chunkOriginZ = chunk.z * map.chunkSize;
+  const resolution = getChunkResolution(chunk);
+
+  for (let row = 0; row < resolution; row += 1) {
+    for (let column = 0; column < resolution; column += 1) {
+      const sampleX = chunkOriginX + column * sampleStep;
+      const sampleZ = chunkOriginZ + row * sampleStep;
+      const distance = Math.hypot(sampleX - target.worldX, sampleZ - target.worldZ);
+      if (distance > radius) {
+        continue;
+      }
+
+      const normalized = distance / radius;
+      const falloff = Math.cos((normalized * Math.PI) / 2) ** 2;
+      const amount = target.delta * target.intensity * falloff;
+      nextHeights[row][column] = Math.max(0, Number((nextHeights[row][column] + amount).toFixed(2)));
+    }
+  }
+
+  chunk.heights = nextHeights;
+}
+
 export function addChunk(map: MapAsset, x: number, z: number): MapAsset {
   if (map.chunks.some((chunk) => chunk.x === x && chunk.z === z)) {
     return cloneMapAsset(map);
   }
 
   const next = cloneMapAsset(map);
-  next.chunks.push(createEmptyChunk(x, z, map.chunkSize));
+  next.chunks.push(createEmptyChunk(x, z, map.chunkSize, map.chunkResolution));
   next.chunks.sort((left, right) => left.z - right.z || left.x - right.x);
   next.bounds = computeMapBounds(next.chunks);
   return next;
@@ -63,47 +129,22 @@ export function removeChunk(map: MapAsset, chunkId: string): MapAsset {
 
 export function sculptTerrain(
   map: MapAsset,
-  target: ChunkCellTarget & {
-    localX: number;
-    localZ: number;
-    delta: number;
-    intensity: number;
-  }
+  target: WorldBrushTarget & { delta: number; intensity: number }
 ): MapAsset {
   const next = cloneMapAsset(map);
-  const chunk = getChunkById(next, target.chunkId);
-  if (!chunk) {
-    return next;
-  }
-
-  const radius = Math.max(0.8, target.radius + 0.6);
-  const nextHeights = chunk.heights.map((row) => [...row]);
-  const sampleStep = chunk.size > 1 ? chunk.size / (chunk.size - 1) : 1;
-
-  for (let row = 0; row < chunk.size; row += 1) {
-    for (let column = 0; column < chunk.size; column += 1) {
-      const sampleX = column * sampleStep;
-      const sampleZ = row * sampleStep;
-      const distance = Math.hypot(sampleX - target.localX, sampleZ - target.localZ);
-      if (distance > radius) {
-        continue;
-      }
-
-      const normalized = distance / radius;
-      const falloff = Math.cos((normalized * Math.PI) / 2) ** 2;
-      const amount = target.delta * target.intensity * falloff;
-      nextHeights[row][column] = Math.max(0, Number((nextHeights[row][column] + amount).toFixed(2)));
+  for (const chunk of next.chunks) {
+    if (brushIntersectsChunk(target.worldX, target.worldZ, target.radius + 0.6, next, chunk)) {
+      sculptChunkTerrain(chunk, next, target);
     }
   }
 
-  chunk.heights = nextHeights;
   next.bounds = computeMapBounds(next.chunks);
   return next;
 }
 
 export function paintWater(
   map: MapAsset,
-  target: ChunkCellTarget & { value: boolean }
+  target: WorldBrushTarget & { value: boolean }
 ): MapAsset {
   return mapChunkCells(map, target, () => target.value, "water");
 }

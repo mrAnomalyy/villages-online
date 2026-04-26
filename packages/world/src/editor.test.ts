@@ -16,11 +16,8 @@ describe("editor map mutations", () => {
   it("sculpts terrain up and down", () => {
     const map = loadPublishedMapAsset();
     const raised = sculptTerrain(map, {
-      chunkId: "0:0",
-      row: 7,
-      column: 7,
-      localX: 7.5,
-      localZ: 7.5,
+      worldX: 7.5,
+      worldZ: 7.5,
       radius: 1,
       delta: 1,
       intensity: 2,
@@ -28,11 +25,8 @@ describe("editor map mutations", () => {
     expect(raised.chunks[0].heights[7][7]).toBeGreaterThan(map.chunks[0].heights[7][7]);
 
     const lowered = sculptTerrain(raised, {
-      chunkId: "0:0",
-      row: 7,
-      column: 7,
-      localX: 7.5,
-      localZ: 7.5,
+      worldX: 7.5,
+      worldZ: 7.5,
       radius: 1,
       delta: -1,
       intensity: 2,
@@ -43,22 +37,37 @@ describe("editor map mutations", () => {
   it("paints and clears water", () => {
     const map = loadPublishedMapAsset();
     const painted = paintWater(map, {
-      chunkId: "0:0",
-      row: 4,
-      column: 4,
+      worldX: 4.5,
+      worldZ: 4.5,
       radius: 0,
       value: true,
     });
     expect(painted.chunks[0].water[4][4]).toBe(true);
 
     const cleared = paintWater(painted, {
-      chunkId: "0:0",
-      row: 12,
-      column: 4,
+      worldX: 4.5,
+      worldZ: 12.5,
       radius: 0,
       value: false,
     });
     expect(cleared.chunks[0].water[12][4]).toBe(false);
+  });
+
+  it("sculpts across chunk boundaries", () => {
+    const map = removeChunk(addChunk(loadPublishedMapAsset(), 1, 0), "0:0");
+    const seeded = addChunk(map, 0, 0);
+    const sculpted = sculptTerrain(seeded, {
+      worldX: seeded.chunkSize - 0.25,
+      worldZ: seeded.chunkSize / 2,
+      radius: 2,
+      delta: 1,
+      intensity: 2,
+    });
+
+    const leftChunk = sculpted.chunks.find((chunk) => chunk.id === "0:0");
+    const rightChunk = sculpted.chunks.find((chunk) => chunk.id === "1:0");
+    expect(leftChunk?.heights.some((row) => row.some((value) => value > 1))).toBe(true);
+    expect(rightChunk?.heights.some((row) => row.some((value) => value > 1))).toBe(true);
   });
 
   it("creates, updates, and deletes NPCs", () => {

@@ -599,6 +599,7 @@ export function MapEditorShell() {
                   <span>`E` water</span>
                   <span>`C` chunks</span>
                   <span>`N` NPC</span>
+                  <span>`WASD` pan</span>
                   <span>`Space` pan</span>
                   <span>`Alt` invert</span>
                 </div>
@@ -642,7 +643,7 @@ export function MapEditorShell() {
 
         <div className="legend legend-overlay">
           <span>Hold left mouse to keep painting. Mouse wheel only zooms the canvas.</span>
-          <span>Space + drag pans the camera. NPC mode still clicks to move or add patrol points.</span>
+          <span>`WASD` pans anytime. `Space` + drag also pans. NPC mode still clicks to move or add patrol points.</span>
         </div>
       </section>
     </main>

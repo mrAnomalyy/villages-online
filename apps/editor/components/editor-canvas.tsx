@@ -76,6 +76,12 @@ export function EditorCanvas({
   const panningRef = useRef(false);
   const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const lastPaintAtRef = useRef(0);
+  const movementKeysRef = useRef({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+  });
 
   useEffect(() => {
     mapRef.current = map;
@@ -157,7 +163,7 @@ export function EditorCanvas({
       camera.attachControl(canvasRef.current, true);
       camera.lowerRadiusLimit = Math.max(24, map.chunkSize * 0.25);
       camera.upperRadiusLimit = Math.max(96, map.chunkSize * 3);
-      camera.wheelPrecision = 50;
+      camera.wheelPrecision = 8;
       camera.panningSensibility = 0;
       const pointerInput = camera.inputs.attached.pointers as { buttons?: number[] } | undefined;
       if (pointerInput) {
@@ -208,8 +214,20 @@ export function EditorCanvas({
       syncScene(sceneHandlesRef.current);
       renderedMapRef.current = mapRef.current;
 
-      const resolveTerrainPick = (): TerrainPick | null => {
-        const pick = activeScene.pick(activeScene.pointerX, activeScene.pointerY);
+      const getPointerPosition = (event: PointerEvent | MouseEvent) => {
+        if (!canvasRef.current) {
+          return { x: 0, y: 0 };
+        }
+
+        const rect = canvasRef.current.getBoundingClientRect();
+        return {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+      };
+
+      const resolveTerrainPick = (pointerX: number, pointerY: number): TerrainPick | null => {
+        const pick = activeScene.pick(pointerX, pointerY);
         if (!pick?.hit || !pick.pickedMesh) {
           return null;
         }
@@ -255,7 +273,7 @@ export function EditorCanvas({
         };
       };
 
-      const panCamera = (deltaX: number, deltaY: number) => {
+      const panCamera = (deltaX: number, deltaY: number, scaleMultiplier = 1) => {
         const forward = camera.target.subtract(camera.position);
         forward.y = 0;
         if (forward.lengthSquared() < 1e-6) {
@@ -266,27 +284,30 @@ export function EditorCanvas({
         const right = new Vector3(forward.z, 0, -forward.x);
         const renderWidth = engine?.getRenderWidth() ?? 800;
         const renderHeight = engine?.getRenderHeight() ?? 800;
-        const scale = camera.radius / Math.max(320, Math.min(renderWidth, renderHeight));
+        const scale =
+          (camera.radius / Math.max(320, Math.min(renderWidth, renderHeight))) * scaleMultiplier;
         camera.target.addInPlace(right.scale(-deltaX * scale));
         camera.target.addInPlace(forward.scale(deltaY * scale));
       };
 
-      activeScene.onPointerDown = (pointerInfo) => {
-        const pointerEvent = pointerInfo as PointerEvent;
-        if (pointerEvent.button !== 0) {
+      const handlePointerDown = (event: PointerEvent) => {
+        if (event.button !== 0) {
           return;
         }
 
-        pointerEvent.preventDefault();
+        event.preventDefault();
+        canvasRef.current?.focus();
+        canvasRef.current?.setPointerCapture(event.pointerId);
         leftPointerDownRef.current = true;
-        lastPointerPositionRef.current = { x: activeScene.pointerX, y: activeScene.pointerY };
+        const pointerPosition = getPointerPosition(event);
+        lastPointerPositionRef.current = pointerPosition;
 
         if (spacePressedRef.current) {
           panningRef.current = true;
           return;
         }
 
-        const pick = activeScene.pick(activeScene.pointerX, activeScene.pointerY);
+        const pick = activeScene.pick(pointerPosition.x, pointerPosition.y);
         if (!pick?.hit || !pick.pickedMesh) {
           return;
         }
@@ -301,7 +322,7 @@ export function EditorCanvas({
           return;
         }
 
-        const resolvedPick = resolveTerrainPick();
+        const resolvedPick = resolveTerrainPick(pointerPosition.x, pointerPosition.y);
         if (!resolvedPick) {
           return;
         }
@@ -312,28 +333,32 @@ export function EditorCanvas({
         lastPaintAtRef.current = performance.now();
       };
 
-      activeScene.onPointerUp = (pointerInfo) => {
-        const pointerEvent = pointerInfo as PointerEvent;
-        if (pointerEvent.button !== 0) {
+      const handlePointerUp = (event: PointerEvent) => {
+        if (event.button !== 0) {
           return;
         }
 
         leftPointerDownRef.current = false;
         panningRef.current = false;
         lastPointerPositionRef.current = null;
+        if (canvasRef.current?.hasPointerCapture(event.pointerId)) {
+          canvasRef.current.releasePointerCapture(event.pointerId);
+        }
       };
 
-      activeScene.onPointerMove = () => {
+      const handlePointerMove = (event: PointerEvent) => {
+        const pointerPosition = getPointerPosition(event);
         if (panningRef.current && lastPointerPositionRef.current) {
-          const deltaX = activeScene.pointerX - lastPointerPositionRef.current.x;
-          const deltaY = activeScene.pointerY - lastPointerPositionRef.current.y;
+          const deltaX = pointerPosition.x - lastPointerPositionRef.current.x;
+          const deltaY = pointerPosition.y - lastPointerPositionRef.current.y;
           panCamera(deltaX, deltaY);
-          lastPointerPositionRef.current = { x: activeScene.pointerX, y: activeScene.pointerY };
+          lastPointerPositionRef.current = pointerPosition;
           return;
         }
 
-        hoverPickRef.current = resolveTerrainPick();
+        hoverPickRef.current = resolveTerrainPick(pointerPosition.x, pointerPosition.y);
         syncBrushPreview();
+        lastPointerPositionRef.current = pointerPosition;
       };
 
       const pointerUp = () => {
@@ -349,14 +374,84 @@ export function EditorCanvas({
       const wheel = (event: WheelEvent) => {
         event.preventDefault();
       };
-      const resize = () => engine?.resize();
+      const keydown = (event: KeyboardEvent) => {
+        if (event.defaultPrevented) {
+          return;
+        }
 
+        const target = event.target;
+        if (
+          target instanceof HTMLElement &&
+          target.closest("input, textarea, select, [contenteditable='true']")
+        ) {
+          return;
+        }
+
+        switch (event.code) {
+          case "KeyW":
+            movementKeysRef.current.forward = true;
+            break;
+          case "KeyS":
+            movementKeysRef.current.backward = true;
+            break;
+          case "KeyA":
+            movementKeysRef.current.left = true;
+            break;
+          case "KeyD":
+            movementKeysRef.current.right = true;
+            break;
+          default:
+            break;
+        }
+      };
+      const keyup = (event: KeyboardEvent) => {
+        switch (event.code) {
+          case "KeyW":
+            movementKeysRef.current.forward = false;
+            break;
+          case "KeyS":
+            movementKeysRef.current.backward = false;
+            break;
+          case "KeyA":
+            movementKeysRef.current.left = false;
+            break;
+          case "KeyD":
+            movementKeysRef.current.right = false;
+            break;
+          default:
+            break;
+        }
+      };
+      const resize = () => engine?.resize();
+      const stopMovement = () => {
+        movementKeysRef.current.forward = false;
+        movementKeysRef.current.backward = false;
+        movementKeysRef.current.left = false;
+        movementKeysRef.current.right = false;
+      };
+
+      canvasRef.current.addEventListener("pointerdown", handlePointerDown);
+      canvasRef.current.addEventListener("pointermove", handlePointerMove);
+      canvasRef.current.addEventListener("pointerup", handlePointerUp);
       canvasRef.current.addEventListener("wheel", wheel, { passive: false });
       window.addEventListener("pointerup", pointerUp);
       window.addEventListener("blur", blur);
+      window.addEventListener("keydown", keydown);
+      window.addEventListener("keyup", keyup);
       window.addEventListener("resize", resize);
 
       engine.runRenderLoop(() => {
+        const movement = movementKeysRef.current;
+        if (movement.forward || movement.backward || movement.left || movement.right) {
+          const deltaSeconds = engine?.getDeltaTime() ? (engine.getDeltaTime() / 1000) : 0.016;
+          const speed = Math.max(14, camera.radius * 0.9) * deltaSeconds;
+          const horizontal = (movement.right ? 1 : 0) - (movement.left ? 1 : 0);
+          const vertical = (movement.backward ? 1 : 0) - (movement.forward ? 1 : 0);
+          if (horizontal !== 0 || vertical !== 0) {
+            panCamera(horizontal, vertical, speed);
+          }
+        }
+
         if (
           leftPointerDownRef.current &&
           !panningRef.current &&
@@ -376,10 +471,16 @@ export function EditorCanvas({
       });
 
       return () => {
+        canvasRef.current?.removeEventListener("pointerdown", handlePointerDown);
+        canvasRef.current?.removeEventListener("pointermove", handlePointerMove);
+        canvasRef.current?.removeEventListener("pointerup", handlePointerUp);
         canvasRef.current?.removeEventListener("wheel", wheel);
         window.removeEventListener("pointerup", pointerUp);
         window.removeEventListener("blur", blur);
+        window.removeEventListener("keydown", keydown);
+        window.removeEventListener("keyup", keyup);
         window.removeEventListener("resize", resize);
+        stopMovement();
         camera.onViewMatrixChangedObservable.removeCallback(emitCameraHeading);
         sceneHandlesRef.current?.terrainBundle?.dispose();
         sceneHandlesRef.current?.npcMeshes.forEach((mesh) => mesh.dispose());
@@ -407,7 +508,14 @@ export function EditorCanvas({
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="editor-canvas" data-testid="editor-canvas" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className="editor-canvas"
+      data-testid="editor-canvas"
+      tabIndex={0}
+    />
+  );
 
   function syncScene(handles: SceneHandles) {
     const activeMap = mapRef.current;

@@ -290,15 +290,16 @@ export function EditorCanvas({
   return <canvas ref={canvasRef} className="editor-canvas" data-testid="editor-canvas" />;
 
   function syncScene(handles: SceneHandles) {
-    const { core, scene } = handles;
-    const { MeshBuilder, Vector3 } = core;
     const activeMap = mapRef.current;
 
-    handles.terrainBundle?.dispose();
-    handles.terrainBundle = buildTerrainScene(core, scene, {
-      chunks: activeMap.chunks,
-      waterLevel: activeMap.waterLevel,
-    });
+    if (!handles.terrainBundle) {
+      handles.terrainBundle = buildTerrainScene(handles.core, handles.scene, {
+        chunks: activeMap.chunks,
+        waterLevel: activeMap.waterLevel,
+      });
+    } else {
+      handles.terrainBundle.syncMap(activeMap, renderedMapRef.current ?? undefined);
+    }
 
     syncNpcMeshes(handles);
     syncSelectionState(handles);
@@ -404,28 +405,30 @@ export function EditorCanvas({
       return;
     }
 
-    if (handles.brushPreview) {
-      handles.brushPreview.dispose();
-      handles.brushPreview = null;
+    const brushDiameter = Math.max(1, brushRadiusRef.current * 2 + 1);
+    let brushPreview = handles.brushPreview;
+    if (!brushPreview) {
+      brushPreview = MeshBuilder.CreateCylinder(
+        "brush-preview",
+        {
+          height: 0.12,
+          diameter: 1,
+          tessellation: 48,
+        },
+        scene
+      );
+      brushPreview.material = handles.brushPreviewMaterial;
+      brushPreview.isPickable = false;
+      handles.brushPreview = brushPreview;
     }
 
-    const brushDiameter = Math.max(1, brushRadiusRef.current * 2 + 1);
-    const brushPreview = MeshBuilder.CreateCylinder(
-      "brush-preview",
-      {
-        height: 0.12,
-        diameter: brushDiameter,
-        tessellation: 48,
-      },
-      scene
-    );
+    brushPreview.scaling.x = brushDiameter;
+    brushPreview.scaling.z = brushDiameter;
     brushPreview.position.copyFromFloats(
       hoverPick.worldX,
       getHeightAt(activeMap, hoverPick.worldX, hoverPick.worldZ) + 0.18,
       hoverPick.worldZ
     );
-    brushPreview.material = handles.brushPreviewMaterial;
-    brushPreview.isPickable = false;
     if (currentMode === "terrain") {
       handles.brushPreviewMaterial.diffuseColor = new Color3(0.53, 0.92, 0.94);
       handles.brushPreviewMaterial.emissiveColor = new Color3(0.14, 0.32, 0.35);
@@ -433,6 +436,5 @@ export function EditorCanvas({
       handles.brushPreviewMaterial.diffuseColor = new Color3(0.25, 0.48, 0.86);
       handles.brushPreviewMaterial.emissiveColor = new Color3(0.08, 0.16, 0.34);
     }
-    handles.brushPreview = brushPreview;
   }
 }

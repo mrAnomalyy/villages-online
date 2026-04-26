@@ -1191,6 +1191,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@villages/world@workspace:packages/world"
   dependencies:
+    "@babylonjs/core": "npm:^8.28.1"
     "@villages/shared": "workspace:*"
     typescript: "npm:^5.9.2"
   languageName: unknown
@@ -1673,6 +1674,21 @@ __metadata:
   checksum: 10c0/199f2a0c1c16593ca0a145dbf76a962f8033ce3129f01284d48c45ed4e14fea9bbacd7b3610b6cdc33486cef20385ac054948fefc6272fcce645c09468f93031
   languageName: node
   linkType: hard
+
+"editor@workspace:apps/editor":
+  version: 0.0.0-use.local
+  resolution: "editor@workspace:apps/editor"
+  dependencies:
+    "@babylonjs/core": "npm:^8.28.1"
+    "@types/react": "npm:^19.1.13"
+    "@types/react-dom": "npm:^19.1.9"
+    "@villages/shared": "workspace:*"
+    "@villages/world": "workspace:*"
+    next: "npm:^15.5.3"
+    react: "npm:^19.1.1"
+    react-dom: "npm:^19.1.1"
+  languageName: unknown
+  linkType: soft
 
 "ee-first@npm:1.1.1":
   version: 1.1.1

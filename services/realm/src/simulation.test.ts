@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyJump, createNpc, stepNpc } from "./simulation";
 import type { PlayerEntity } from "./types";
-import { loadPublishedMapAsset } from "@villages/world";
+import { loadPublishedMapAsset } from "@villages/world/asset-store";
 
 describe("realm simulation", () => {
   it("applies jump only from the ground", () => {

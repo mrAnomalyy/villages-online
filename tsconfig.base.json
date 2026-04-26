@@ -13,7 +13,9 @@
     "baseUrl": ".",
     "paths": {
       "@villages/shared": ["packages/shared/src/index.ts"],
-      "@villages/world": ["packages/world/src/index.ts"]
+      "@villages/shared/*": ["packages/shared/src/*"],
+      "@villages/world": ["packages/world/src/index.ts"],
+      "@villages/world/*": ["packages/world/src/*"]
     }
   }
 }

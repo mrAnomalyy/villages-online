@@ -1,12 +1,7 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { CHUNK_SIZE, type MapAsset, type MapNpcDefinition, type TerrainChunkDTO } from "@villages/shared";
 
 export const TEST_MAP_ID = "starter-valley";
 export const MAP_ASSET_VERSION = 1;
-
-const assetDirectory = fileURLToPath(new URL("../assets", import.meta.url));
 
 export function getChunkId(x: number, z: number): string {
   return `${x}:${z}`;
@@ -311,19 +306,4 @@ export function getWaterAt(map: MapAsset, x: number, z: number): boolean {
   const localColumn = Math.max(0, Math.min(chunk.size - 1, Math.floor(x - chunk.x * map.chunkSize)));
   const localRow = Math.max(0, Math.min(chunk.size - 1, Math.floor(z - chunk.z * map.chunkSize)));
   return chunk.water[localRow][localColumn];
-}
-
-export function getPublishedMapAssetPath(mapId: string): string {
-  return resolve(assetDirectory, `${mapId}.json`);
-}
-
-export function loadPublishedMapAsset(mapId = TEST_MAP_ID): MapAsset {
-  const content = readFileSync(getPublishedMapAssetPath(mapId), "utf8");
-  return parseMapAsset(JSON.parse(content) as unknown);
-}
-
-export function savePublishedMapAsset(map: MapAsset): MapAsset {
-  const parsed = parseMapAsset(map);
-  writeFileSync(getPublishedMapAssetPath(parsed.mapId), `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
-  return parsed;
 }

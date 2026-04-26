@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { MapAsset } from "@villages/shared";
-import { loadPublishedMapAsset, savePublishedMapAsset } from "@villages/world";
+import { loadPublishedMapAsset, savePublishedMapAsset } from "@villages/world/asset-store";
 
 export async function GET(
   _request: Request,

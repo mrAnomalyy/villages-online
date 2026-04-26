@@ -9,7 +9,8 @@ import {
   type InitialWorldPayload,
   type ServerSocketMessage,
 } from "@villages/shared";
-import { getChunksAroundPosition, getHeightAt, getNeighborChunks, loadPublishedMapAsset, TEST_MAP_ID } from "@villages/world";
+import { getChunksAroundPosition, getHeightAt, getNeighborChunks, TEST_MAP_ID } from "@villages/world";
+import { loadPublishedMapAsset } from "@villages/world/asset-store";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
 import type { PlayerEntity } from "./types";
 

@@ -1,0 +1,30 @@
+services:
+  gateway:
+    image: villagesonline-gateway-dev-${VILLAGES_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: infra/tooling/dev-app.Dockerfile
+
+  realm-alpha:
+    image: villagesonline-realm-dev-${VILLAGES_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: infra/tooling/dev-app.Dockerfile
+
+  realm-beta:
+    image: villagesonline-realm-dev-${VILLAGES_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: infra/tooling/dev-app.Dockerfile
+
+  web:
+    image: villagesonline-web-dev-${VILLAGES_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: infra/tooling/dev-app.Dockerfile
+
+  editor:
+    image: villagesonline-editor-dev-${VILLAGES_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: infra/tooling/dev-app.Dockerfile

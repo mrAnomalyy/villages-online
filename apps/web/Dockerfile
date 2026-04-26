@@ -5,6 +5,7 @@ WORKDIR /app
 RUN corepack enable
 
 COPY package.json .yarnrc.yml tsconfig.base.json ./
+COPY .yarn ./.yarn
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/world/package.json ./packages/world/package.json

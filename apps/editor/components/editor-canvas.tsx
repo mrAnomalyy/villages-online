@@ -27,6 +27,8 @@ type Props = {
   onTerrainPick: (pick: TerrainPick) => void;
   onNpcPick: (npcId: string) => void;
   onCameraHeadingChange: (headingDegrees: number) => void;
+  onStrokeStart?: () => void;
+  onStrokeEnd?: () => void;
 };
 
 type BabylonCoreModule = typeof BabylonCore;
@@ -59,6 +61,8 @@ export function EditorCanvas({
   onTerrainPick,
   onNpcPick,
   onCameraHeadingChange,
+  onStrokeStart,
+  onStrokeEnd,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mapRef = useRef(map);
@@ -70,10 +74,13 @@ export function EditorCanvas({
   const onTerrainPickRef = useRef(onTerrainPick);
   const onNpcPickRef = useRef(onNpcPick);
   const onCameraHeadingChangeRef = useRef(onCameraHeadingChange);
+  const onStrokeStartRef = useRef(onStrokeStart);
+  const onStrokeEndRef = useRef(onStrokeEnd);
   const sceneHandlesRef = useRef<SceneHandles | null>(null);
   const hoverPickRef = useRef<TerrainPick | null>(null);
   const renderedMapRef = useRef<MapAsset | null>(null);
   const leftPointerDownRef = useRef(false);
+  const strokeActiveRef = useRef(false);
   const panningRef = useRef(false);
   const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
   const lastPaintAtRef = useRef(0);
@@ -96,12 +103,16 @@ export function EditorCanvas({
     onTerrainPickRef.current = onTerrainPick;
     onNpcPickRef.current = onNpcPick;
     onCameraHeadingChangeRef.current = onCameraHeadingChange;
+    onStrokeStartRef.current = onStrokeStart;
+    onStrokeEndRef.current = onStrokeEnd;
   }, [
     brushRadius,
     map,
     mode,
     onCameraHeadingChange,
     onNpcPick,
+    onStrokeEnd,
+    onStrokeStart,
     onTerrainPick,
     selectedChunkId,
     selectedNpcId,
@@ -341,6 +352,11 @@ export function EditorCanvas({
         }
 
         leftPointerDownRef.current = true;
+        if (modeRef.current === "terrain" || modeRef.current === "water") {
+          strokeActiveRef.current = true;
+          onStrokeStartRef.current?.();
+        }
+
         const pick = activeScene.pick(pointerPosition.x, pointerPosition.y);
         if (!pick?.hit || !pick.pickedMesh) {
           return;
@@ -370,6 +386,11 @@ export function EditorCanvas({
       const handleMouseUp = (event: MouseEvent) => {
         if (event.button !== 0) {
           return;
+        }
+
+        if (strokeActiveRef.current) {
+          strokeActiveRef.current = false;
+          onStrokeEndRef.current?.();
         }
 
         leftPointerDownRef.current = false;
@@ -405,6 +426,10 @@ export function EditorCanvas({
       };
 
       const resetPointerState = () => {
+        if (strokeActiveRef.current) {
+          strokeActiveRef.current = false;
+          onStrokeEndRef.current?.();
+        }
         leftPointerDownRef.current = false;
         panningRef.current = false;
         lastPointerPositionRef.current = null;

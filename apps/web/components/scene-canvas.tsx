@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { EntitySnapshot, InitialWorldPayload } from "@villages/shared";
+import type { EntityDespawnMessage, EntitySnapshot, InitialWorldPayload } from "@villages/shared";
 import type { Engine, Mesh, Scene } from "@babylonjs/core";
 import { buildTerrainScene } from "@villages/world";
 
@@ -10,12 +10,13 @@ type Props = {
   entities: EntitySnapshot[];
   onMove: (direction: { x: number; z: number }) => void;
   onJump: () => void;
+  lastDespawnMessage?: EntityDespawnMessage | null;
 };
 
 const MOVEMENT_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD"] as const;
 const CONTROL_KEYS = [...MOVEMENT_KEYS, "Space"] as const;
 
-export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
+export function BabylonGameCanvas({ world, entities, onMove, onJump, lastDespawnMessage }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const worldRef = useRef(world);
   const entitiesRef = useRef(entities);
@@ -26,6 +27,14 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
     worldRef.current = world;
     entitiesRef.current = entities;
   }, [entities, world]);
+
+  useEffect(() => {
+    if (lastDespawnMessage?.type === "entityDespawn") {
+      entitiesRef.current = entitiesRef.current.filter(
+        (entity) => entity.id !== lastDespawnMessage.entityId
+      );
+    }
+  }, [lastDespawnMessage]);
 
   useEffect(() => {
     onMoveRef.current = onMove;
@@ -209,6 +218,38 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
 
       const playerNameplate = createNameplate("player-self", worldRef.current.player.label);
 
+      const disposeEntityMeshes = (entityId: string) => {
+        const mesh = entityMeshes.get(entityId);
+        if (mesh) {
+          mesh.dispose();
+          entityMeshes.delete(entityId);
+        }
+        const plate = nameplates.get(entityId);
+        if (plate) {
+          const material = plate.material;
+          plate.dispose();
+          if (material && "dispose" in material) {
+            material.dispose();
+          }
+          nameplates.delete(entityId);
+        }
+      };
+
+      const handleDespawn = (message: EntityDespawnMessage) => {
+        if (message.type === "entityDespawn") {
+          entitiesRef.current = entitiesRef.current.filter((e) => e.id !== message.entityId);
+          disposeEntityMeshes(message.entityId);
+        }
+      };
+
+      const onCustomDespawn = (event: Event) => {
+        const customEvent = event as CustomEvent<EntityDespawnMessage>;
+        if (customEvent.detail?.type === "entityDespawn") {
+          handleDespawn(customEvent.detail);
+        }
+      };
+      window.addEventListener("villages:entityDespawn", onCustomDespawn);
+
       const syncEntities = (snapshots: EntitySnapshot[]) => {
         for (const snapshot of snapshots) {
           let mesh = entityMeshes.get(snapshot.id);
@@ -244,21 +285,15 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
           );
         }
 
-        for (const [id, mesh] of entityMeshes.entries()) {
+        for (const id of Array.from(entityMeshes.keys())) {
           if (!snapshots.some((snapshot) => snapshot.id === id)) {
-            mesh.dispose();
-            entityMeshes.delete(id);
+            disposeEntityMeshes(id);
           }
         }
 
-        for (const [id, plate] of nameplates.entries()) {
+        for (const id of Array.from(nameplates.keys())) {
           if (!snapshots.some((snapshot) => snapshot.id === id)) {
-            const material = plate.material;
-            plate.dispose();
-            if (material && "dispose" in material) {
-              material.dispose();
-            }
-            nameplates.delete(id);
+            disposeEntityMeshes(id);
           }
         }
       };
@@ -314,6 +349,7 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         window.removeEventListener("keyup", keyup);
         window.removeEventListener("blur", blur);
         window.removeEventListener("resize", resize);
+        window.removeEventListener("villages:entityDespawn", onCustomDespawn);
         playerNameplate.dispose();
         terrainBundle.dispose();
         entityMeshes.forEach((mesh) => mesh.dispose());
@@ -341,4 +377,15 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
   }, []);
 
   return <canvas ref={canvasRef} data-testid="game-canvas" />;
+}
+
+export function handleEntityDespawnMessage(
+  entitiesRef: { current: EntitySnapshot[] },
+  disposeFn: (entityId: string) => void,
+  message: EntityDespawnMessage
+): void {
+  if (message.type === "entityDespawn") {
+    entitiesRef.current = entitiesRef.current.filter((e) => e.id !== message.entityId);
+    disposeFn(message.entityId);
+  }
 }

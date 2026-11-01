@@ -217,6 +217,7 @@ When starting a coding session, picking up a task, or receiving user requests:
 3. **Log Progress & Blockers**:
    - Post updates upon completing significant milestones or architectural changes:
      `kanzo.add_comment(id="villages#<id>", body="Implemented ... in commit <hash>.")`.
+   - Provide direct status updates to the human developer in chat at key phase transitions (task pickup, implementation complete, test pass, PR opened).
    - If blocked or requesting architectural clarification from the user, add a comment documenting the blocker before pausing.
 4. **Handoff & Review Transition**:
    - Once all automated checks pass locally (`yarn test`, `yarn lint`, `yarn typecheck`, `yarn build`):
@@ -236,3 +237,22 @@ Before finishing any task or opening a pull request:
 5. All newly created or modified files adhere to Prettier formatting (`yarn format`).
 6. Commit messages follow the `<type>(<scope>): <TASK-ID> Message` convention (e.g. `feat(scope): villages#1 ...`).
 7. The active Kanzo task card has been transitioned to `review` with a completion comment.
+8. The human developer has been notified in chat with the PR link and a concise progress summary.
+
+---
+
+## 9. Proactive Status Reporting & Developer Visibility
+
+To maintain tight collaboration and feedback loops with the developer:
+
+- **Regular Progress Updates**: Agents must proactively report their progress to the human developer during active development. Never execute long, multi-step sequences or task lifecycles completely silently.
+- **Reporting Triggers**:
+  - **Task Start**: When picking up or moving a task to `doing` and creating the feature branch.
+  - **Milestone Completion**: When core logic, schema migrations, or complex modules are finished.
+  - **Test & Verification**: When running the test suite, linting, typecheck, or build, reporting whether checks passed or failed.
+  - **PR Creation**: When opening a pull request, providing the PR link, modified files, and testing instructions.
+- **Report Format**: Keep reports structured and concise:
+  1. _Current Task & Branch_
+  2. _What Was Accomplished_
+  3. _Current Quality / Verification Status_
+  4. _Immediate Next Step_

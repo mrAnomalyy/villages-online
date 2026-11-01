@@ -18,6 +18,7 @@ import {
 } from "@villages/world";
 import { getPublishedMapAssetPath, loadPublishedMapAsset } from "@villages/world/asset-store";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
+import { ChatRateLimiter, handleIncomingChat } from "./chat";
 import type { PlayerEntity } from "./types";
 
 const port = Number(process.env.PORT ?? 4101);
@@ -57,6 +58,7 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 const players = new Map<string, PlayerEntity>();
 const sockets = new Map<string, WebSocket>();
+const chatRateLimiter = new ChatRateLimiter();
 let visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
 
 function asPlayerSnapshot(player: PlayerEntity) {
@@ -299,6 +301,21 @@ wss.on("connection", (socket) => {
           chunks: getNeighborChunks(worldMap, message.centerChunkId),
         } satisfies ServerSocketMessage)
       );
+      return;
+    }
+
+    if (message.type === "chat") {
+      await handleIncomingChat(
+        {
+          sender: player,
+          senderSocket: socket,
+          players,
+          sockets,
+          rateLimiter: chatRateLimiter,
+        },
+        message
+      );
+      return;
     }
   });
 
@@ -309,6 +326,7 @@ wss.on("connection", (socket) => {
     const character = players.get(currentCharacterId);
     if (character) {
       await persistCharacter(character);
+      chatRateLimiter.reset(character.playerId);
       players.delete(currentCharacterId);
     }
     sockets.delete(currentCharacterId);

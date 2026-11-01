@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { EntitySnapshot, InitialWorldPayload } from "@villages/shared";
-import type { Engine, Mesh, Scene } from "@babylonjs/core";
+import type { EntitySnapshot, InitialWorldPayload, ServerChatMessage } from "@villages/shared";
+import type { Engine, Mesh, Scene, StandardMaterial } from "@babylonjs/core";
 import { buildTerrainScene } from "@villages/world";
 
 type Props = {
   world: InitialWorldPayload;
   entities: EntitySnapshot[];
+  latestChatMessage?: ServerChatMessage | null;
   onMove: (direction: { x: number; z: number }) => void;
   onJump: () => void;
 };
@@ -15,17 +16,24 @@ type Props = {
 const MOVEMENT_KEYS = ["KeyW", "KeyA", "KeyS", "KeyD"] as const;
 const CONTROL_KEYS = [...MOVEMENT_KEYS, "Space"] as const;
 
-export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
+export function BabylonGameCanvas({ world, entities, latestChatMessage, onMove, onJump }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const worldRef = useRef(world);
   const entitiesRef = useRef(entities);
   const onMoveRef = useRef(onMove);
   const onJumpRef = useRef(onJump);
+  const onNewChatMessageRef = useRef<((message: ServerChatMessage) => void) | null>(null);
 
   useEffect(() => {
     worldRef.current = world;
     entitiesRef.current = entities;
   }, [entities, world]);
+
+  useEffect(() => {
+    if (latestChatMessage) {
+      onNewChatMessageRef.current?.(latestChatMessage);
+    }
+  }, [latestChatMessage]);
 
   useEffect(() => {
     onMoveRef.current = onMove;
@@ -209,6 +217,140 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
 
       const playerNameplate = createNameplate("player-self", worldRef.current.player.label);
 
+      type SpeechBubbleRecord = {
+        mesh: Mesh;
+        material: StandardMaterial;
+        createdAt: number;
+        speakerId: string;
+        isSelf: boolean;
+      };
+
+      const speechBubbles = new Map<string, SpeechBubbleRecord>();
+
+      const createOrUpdateSpeechBubble = (msg: ServerChatMessage) => {
+        const isSelf =
+          msg.senderId === worldRef.current.player.id ||
+          msg.senderNickname === worldRef.current.player.label;
+
+        let speakerId = msg.senderId;
+        if (!isSelf) {
+          const entity = entitiesRef.current.find(
+            (e) => e.id === msg.senderId || e.label === msg.senderNickname
+          );
+          if (entity) {
+            speakerId = entity.id;
+          }
+        }
+
+        const existing = speechBubbles.get(speakerId);
+        if (existing) {
+          existing.mesh.dispose();
+          existing.material.dispose();
+          speechBubbles.delete(speakerId);
+        }
+
+        const isYell = msg.channel === "yell";
+        const plane = MeshBuilder.CreatePlane(
+          `bubble-${speakerId}-${Date.now()}`,
+          { width: 3.4, height: 1.05 },
+          activeScene
+        );
+        plane.billboardMode = core.Mesh.BILLBOARDMODE_ALL;
+        plane.isPickable = false;
+
+        const texture = new core.DynamicTexture(
+          `bubble-tex-${speakerId}-${Date.now()}`,
+          { width: 512, height: 160 },
+          activeScene
+        );
+        texture.hasAlpha = true;
+        const context = texture.getContext() as unknown as CanvasRenderingContext2D;
+        context.clearRect(0, 0, 512, 160);
+
+        const bx = 16;
+        const by = 12;
+        const bw = 480;
+        const bh = 108;
+        const br = 18;
+
+        context.beginPath();
+        context.moveTo(bx + br, by);
+        context.lineTo(bx + bw - br, by);
+        context.quadraticCurveTo(bx + bw, by, bx + bw, by + br);
+        context.lineTo(bx + bw, by + bh - br);
+        context.quadraticCurveTo(bx + bw, by + bh, bx + bw - br, by + bh);
+
+        // Pointer downward tip
+        context.lineTo(256 + 18, by + bh);
+        context.lineTo(256, by + bh + 26);
+        context.lineTo(256 - 18, by + bh);
+
+        context.lineTo(bx + br, by + bh);
+        context.quadraticCurveTo(bx, by + bh, bx, by + bh - br);
+        context.lineTo(bx, by + br);
+        context.quadraticCurveTo(bx, by, bx + br, by);
+        context.closePath();
+
+        context.fillStyle = isYell ? "rgba(35, 10, 10, 0.92)" : "rgba(8, 14, 25, 0.90)";
+        context.fill();
+
+        context.lineWidth = isYell ? 6 : 3.5;
+        context.strokeStyle = isYell ? "#ff4d4f" : "rgba(240, 240, 240, 0.88)";
+        context.stroke();
+
+        context.font = isYell ? "bold 32px Georgia, sans-serif" : "28px Georgia, sans-serif";
+        context.fillStyle = isYell ? "#ff4d4f" : "#f7f2e8";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+
+        const rawText = msg.text;
+        const maxChars = isYell ? 36 : 42;
+        const textToShow =
+          rawText.length > maxChars ? rawText.slice(0, maxChars - 3) + "..." : rawText;
+        context.fillText(textToShow, 256, by + bh / 2);
+        texture.update();
+
+        const material = new StandardMaterial(`bubble-mat-${speakerId}`, activeScene);
+        material.diffuseTexture = texture;
+        material.emissiveColor = Color3.White();
+        material.backFaceCulling = false;
+        material.useAlphaFromDiffuseTexture = true;
+        plane.material = material;
+
+        if (isSelf) {
+          plane.position.copyFromFloats(
+            worldRef.current.player.position.x,
+            worldRef.current.player.position.y + 4.4,
+            worldRef.current.player.position.z
+          );
+        } else {
+          const entity = entitiesRef.current.find((e) => e.id === speakerId);
+          if (entity) {
+            plane.position.copyFromFloats(
+              entity.position.x,
+              entity.position.y + 4.3,
+              entity.position.z
+            );
+          } else if (msg.position) {
+            plane.position.copyFromFloats(msg.position.x, msg.position.y + 4.3, msg.position.z);
+          }
+        }
+
+        speechBubbles.set(speakerId, {
+          mesh: plane,
+          material,
+          createdAt: performance.now(),
+          speakerId,
+          isSelf,
+        });
+      };
+
+      onNewChatMessageRef.current = (message: ServerChatMessage) => {
+        if (message.channel === "say" || message.channel === "yell") {
+          createOrUpdateSpeechBubble(message);
+        }
+      };
+
       const syncEntities = (snapshots: EntitySnapshot[]) => {
         for (const snapshot of snapshots) {
           let mesh = entityMeshes.get(snapshot.id);
@@ -299,6 +441,37 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         cameraTarget.x += (currentWorld.player.position.x - cameraTarget.x) * 0.15;
         cameraTarget.z += (currentWorld.player.position.z - cameraTarget.z) * 0.15;
         camera.target.copyFrom(cameraTarget);
+
+        const now = performance.now();
+        for (const [speakerId, bubble] of speechBubbles.entries()) {
+          const ageMs = now - bubble.createdAt;
+          if (ageMs > 5500) {
+            bubble.mesh.dispose();
+            bubble.material.dispose();
+            speechBubbles.delete(speakerId);
+            continue;
+          }
+          if (ageMs > 4000) {
+            const fade = (ageMs - 4000) / 1500;
+            bubble.material.alpha = Math.max(0, 1 - fade);
+          } else {
+            bubble.material.alpha = 1;
+          }
+
+          if (bubble.isSelf) {
+            bubble.mesh.position.x = currentWorld.player.position.x;
+            bubble.mesh.position.y = currentWorld.player.position.y + 4.4;
+            bubble.mesh.position.z = currentWorld.player.position.z;
+          } else {
+            const entity = currentEntities.find((e) => e.id === speakerId);
+            if (entity) {
+              bubble.mesh.position.x = entity.position.x;
+              bubble.mesh.position.y = entity.position.y + 4.3;
+              bubble.mesh.position.z = entity.position.z;
+            }
+          }
+        }
+
         scene.render();
       });
 
@@ -314,6 +487,12 @@ export function BabylonGameCanvas({ world, entities, onMove, onJump }: Props) {
         window.removeEventListener("keyup", keyup);
         window.removeEventListener("blur", blur);
         window.removeEventListener("resize", resize);
+        onNewChatMessageRef.current = null;
+        speechBubbles.forEach((bubble) => {
+          bubble.mesh.dispose();
+          bubble.material.dispose();
+        });
+        speechBubbles.clear();
         playerNameplate.dispose();
         terrainBundle.dispose();
         entityMeshes.forEach((mesh) => mesh.dispose());

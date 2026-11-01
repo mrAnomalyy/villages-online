@@ -133,6 +133,27 @@ export type ClientJumpInput = {
   sequence: number;
 };
 
+export type ChatChannel = "say" | "yell" | "whisper" | "lfg" | "emote";
+
+export type ClientChatMessage = {
+  type: "chat";
+  channel: ChatChannel;
+  text: string;
+  targetNickname?: string;
+};
+
+export type ServerChatMessage = {
+  type: "chatMessage";
+  id: string;
+  senderId: string;
+  senderNickname: string;
+  channel: ChatChannel;
+  text: string;
+  position?: Vector3Like;
+  targetNickname?: string;
+  timestamp: number;
+};
+
 export type ClientSocketMessage =
   | {
       type: "hello";
@@ -143,7 +164,8 @@ export type ClientSocketMessage =
   | {
       type: "subscribeChunks";
       centerChunkId: string;
-    };
+    }
+  | ClientChatMessage;
 
 export type ServerSocketMessage =
   | {
@@ -162,7 +184,8 @@ export type ServerSocketMessage =
   | {
       type: "error";
       message: string;
-    };
+    }
+  | ServerChatMessage;
 
 export const PLAYER_SPEED = 6;
 export const JUMP_VELOCITY = 7;
@@ -171,6 +194,87 @@ export const TICK_RATE = 10;
 export const CHUNK_SIZE = 128;
 export const CHUNK_RESOLUTION = 64;
 
+export const CHAT_SAY_DISTANCE = 25;
+export const CHAT_YELL_DISTANCE = 100;
+export const CHAT_EMOTE_DISTANCE = 25;
+export const CHAT_RATE_LIMIT_MAX = 5;
+export const CHAT_RATE_LIMIT_WINDOW_MS = 3000;
+
 export function sanitizeNickname(value: string): string {
   return value.trim().replace(/\s+/g, " ");
+}
+
+export function parseChatInput(
+  raw: string,
+  defaultChannel: ChatChannel = "say"
+): { channel: ChatChannel; text: string; targetNickname?: string } {
+  const trimmed = raw.trim();
+
+  const whisperMatch = trimmed.match(/^\/(?:w|whisper)(?:\s+(\S+)(?:\s+(.*))?)?$/i);
+  if (whisperMatch) {
+    return {
+      channel: "whisper",
+      targetNickname: whisperMatch[1] ?? "",
+      text: (whisperMatch[2] ?? "").trim(),
+    };
+  }
+
+  const sayMatch = trimmed.match(/^\/(?:s|say)(?:\s+(.*))?$/i);
+  if (sayMatch) {
+    return {
+      channel: "say",
+      text: (sayMatch[1] ?? "").trim(),
+    };
+  }
+
+  const yellMatch = trimmed.match(/^\/(?:y|yell)(?:\s+(.*))?$/i);
+  if (yellMatch) {
+    return {
+      channel: "yell",
+      text: (yellMatch[1] ?? "").trim(),
+    };
+  }
+
+  const lfgMatch = trimmed.match(/^\/(?:lfg|4)(?:\s+(.*))?$/i);
+  if (lfgMatch) {
+    return {
+      channel: "lfg",
+      text: (lfgMatch[1] ?? "").trim(),
+    };
+  }
+
+  const emoteMatch = trimmed.match(/^\/(?:e|emote)(?:\s+(.*))?$/i);
+  if (emoteMatch) {
+    return {
+      channel: "emote",
+      text: (emoteMatch[1] ?? "").trim(),
+    };
+  }
+
+  return {
+    channel: defaultChannel,
+    text: trimmed,
+  };
+}
+
+export function formatChatMessage(message: ServerChatMessage, viewerNickname?: string): string {
+  switch (message.channel) {
+    case "say":
+      return `[Say] ${message.senderNickname}: ${message.text}`;
+    case "yell":
+      return `[Yell] ${message.senderNickname}: ${message.text}`;
+    case "whisper":
+      if (
+        viewerNickname &&
+        message.senderNickname.toLowerCase() === viewerNickname.toLowerCase() &&
+        message.targetNickname
+      ) {
+        return `To ${message.targetNickname}: ${message.text}`;
+      }
+      return `${message.senderNickname} whispers: ${message.text}`;
+    case "lfg":
+      return `[4. LFG] ${message.senderNickname}: ${message.text}`;
+    case "emote":
+      return `${message.senderNickname} ${message.text}`;
+  }
 }

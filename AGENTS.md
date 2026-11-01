@@ -238,6 +238,7 @@ Before finishing any task or opening a pull request:
 6. Commit messages follow the `<type>(<scope>): <TASK-ID> Message` convention (e.g. `feat(scope): villages#1 ...`).
 7. The active Kanzo task card has been transitioned to `review` with a completion comment.
 8. The human developer has been notified in chat with the PR link and a concise progress summary.
+9. **Visual Verification Screenshots**: For any user-facing, client, or editor feature (`apps/web`, `apps/editor`), capture multiple Playwright screenshots demonstrating distinct states of the feature (e.g. idle/initial state, active/interaction state, and toggled/result state). Commit screenshots to `assets/screenshots/` and embed them in the PR description or initial comment for visual review.
 
 ---
 
@@ -256,3 +257,28 @@ To maintain tight collaboration and feedback loops with the developer:
   2. _What Was Accomplished_
   3. _Current Quality / Verification Status_
   4. _Immediate Next Step_
+
+---
+
+## 10. Visual Verification & Playwright PR Screenshots
+
+Whenever a task modifies visual components, UI overlays, HUD elements, canvas rendering, or editor tooling:
+
+1. **Capture Multiple Feature States**:
+   - Never capture only a single static frame if the feature has dynamic states.
+   - Capture **at least 2–3 distinct states**, for example:
+     - _State A: Initial / Idle State_ (e.g., unopened chat box, empty undo stack).
+     - _State B: Active / In-Use State_ (e.g., focused chat input with `/s` channel badge, brush stroke preview).
+     - _State C: Result / Populated State_ (e.g., in-world 3D speech bubble above avatar, populated undo stack with active counters).
+2. **Automated Capture with Playwright**:
+   - Use Playwright headless Chromium to load the built app, perform user interactions (`click`, `fill`, `hover`), and call `await page.screenshot({ path: "assets/screenshots/<feature>-<state>.png" })`.
+3. **Commit & Embed in PR**:
+   - Commit screenshots into `assets/screenshots/` on the feature branch.
+   - Reference the screenshots in the PR description or PR comment using raw GitHub links:
+     ```markdown
+     ### Visual Verification
+
+     |                                                       Initial State                                                        |                                                       Active State                                                       |                                               Populated / Triggered State                                                |
+     | :------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
+     | ![Initial](https://raw.githubusercontent.com/mrAnomalyy/villages-online/<branch>/assets/screenshots/<feature>-initial.png) | ![Active](https://raw.githubusercontent.com/mrAnomalyy/villages-online/<branch>/assets/screenshots/<feature>-active.png) | ![Result](https://raw.githubusercontent.com/mrAnomalyy/villages-online/<branch>/assets/screenshots/<feature>-result.png) |
+     ```

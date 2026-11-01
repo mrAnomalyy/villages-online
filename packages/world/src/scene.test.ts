@@ -8,12 +8,14 @@ import { buildTerrainScene } from "./scene";
 function findVertexHeight(
   positions: ArrayLike<number>,
   targetX: number,
-  targetZ: number
+  targetZ: number,
+  offsetX = 0,
+  offsetZ = 0
 ): number | null {
   for (let index = 0; index < positions.length; index += 3) {
-    const x = positions[index];
+    const x = positions[index] + offsetX;
     const y = positions[index + 1];
-    const z = positions[index + 2];
+    const z = positions[index + 2] + offsetZ;
     if (Math.abs(x - targetX) < 1e-4 && Math.abs(z - targetZ) < 1e-4) {
       return y;
     }
@@ -55,13 +57,15 @@ describe("terrain scene mesh mapping", () => {
         }
       );
 
-      const positions =
-        terrain.terrainMeshes[0]?.getVerticesData(core.VertexBuffer.PositionKind) ?? [];
+      const mesh = terrain.terrainMeshes[0];
+      const positions = mesh?.getVerticesData(core.VertexBuffer.PositionKind) ?? [];
+      const offsetX = mesh?.position.x ?? 0;
+      const offsetZ = mesh?.position.z ?? 0;
 
-      expect(findVertexHeight(positions, 0, 0)).toBe(10);
-      expect(findVertexHeight(positions, 4, 0)).toBe(13);
-      expect(findVertexHeight(positions, 0, 4)).toBe(40);
-      expect(findVertexHeight(positions, 4, 4)).toBe(43);
+      expect(findVertexHeight(positions, 0, 0, offsetX, offsetZ)).toBe(10);
+      expect(findVertexHeight(positions, 4, 0, offsetX, offsetZ)).toBe(13);
+      expect(findVertexHeight(positions, 0, 4, offsetX, offsetZ)).toBe(40);
+      expect(findVertexHeight(positions, 4, 4, offsetX, offsetZ)).toBe(43);
 
       terrain.dispose();
     } finally {

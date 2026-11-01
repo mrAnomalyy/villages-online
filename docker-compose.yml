@@ -48,7 +48,7 @@ services:
       [
         "sh",
         "-lc",
-        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace gateway dev"
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace gateway dev",
       ]
     depends_on:
       postgres:
@@ -79,7 +79,7 @@ services:
       [
         "sh",
         "-lc",
-        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace realm dev:alpha"
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace realm dev:alpha",
       ]
     depends_on:
       gateway:
@@ -108,7 +108,7 @@ services:
       [
         "sh",
         "-lc",
-        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace realm dev:beta"
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace realm dev:beta",
       ]
     depends_on:
       gateway:
@@ -133,7 +133,7 @@ services:
       [
         "sh",
         "-lc",
-        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace web exec next dev --hostname 0.0.0.0 --port 3000"
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace web exec next dev --hostname 0.0.0.0 --port 3000",
       ]
     depends_on:
       gateway:
@@ -161,7 +161,7 @@ services:
       [
         "sh",
         "-lc",
-        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace editor exec next dev --hostname 0.0.0.0 --port 3000"
+        "corepack enable && (yarn install --immutable || yarn install) && yarn workspace editor exec next dev --hostname 0.0.0.0 --port 3000",
       ]
 
 volumes:

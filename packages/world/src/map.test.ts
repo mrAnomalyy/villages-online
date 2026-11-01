@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { loadPublishedMapAsset } from "./asset-store";
-import { getHeightAt, getNeighborChunks, getWaterAt, parseMapAsset, resolveChunkIdForPosition } from "./map";
+import {
+  getHeightAt,
+  getNeighborChunks,
+  getWaterAt,
+  parseMapAsset,
+  resolveChunkIdForPosition,
+} from "./map";
 
 describe("map asset loading", () => {
   it("loads the published starter map", () => {

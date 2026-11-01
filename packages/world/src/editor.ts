@@ -81,9 +81,19 @@ function mapChunkCells(
           continue;
         }
         if (key === "heights") {
-          chunk.heights[row][column] = update(chunk.heights[row][column], row, column, chunk) as number;
+          chunk.heights[row][column] = update(
+            chunk.heights[row][column],
+            row,
+            column,
+            chunk
+          ) as number;
         } else {
-          chunk.water[row][column] = update(chunk.water[row][column], row, column, chunk) as boolean;
+          chunk.water[row][column] = update(
+            chunk.water[row][column],
+            row,
+            column,
+            chunk
+          ) as boolean;
         }
       }
     }
@@ -133,7 +143,10 @@ function sculptChunkTerrain(
       const normalized = distance / radius;
       const falloff = Math.cos((normalized * Math.PI) / 2) ** 2;
       const amount = target.delta * target.intensity * falloff;
-      nextHeights[row][column] = Math.max(0, Number((nextHeights[row][column] + amount).toFixed(2)));
+      nextHeights[row][column] = Math.max(
+        0,
+        Number((nextHeights[row][column] + amount).toFixed(2))
+      );
     }
   }
 
@@ -178,10 +191,7 @@ export function sculptTerrain(
   return next;
 }
 
-export function paintWater(
-  map: MapAsset,
-  target: WorldBrushTarget & { value: boolean }
-): MapAsset {
+export function paintWater(map: MapAsset, target: WorldBrushTarget & { value: boolean }): MapAsset {
   return mapChunkCells(map, target, () => target.value, "water");
 }
 

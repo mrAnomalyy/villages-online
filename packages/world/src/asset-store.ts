@@ -36,6 +36,10 @@ export function loadPublishedMapAsset(mapId = TEST_MAP_ID): MapAsset {
 
 export function savePublishedMapAsset(map: MapAsset): MapAsset {
   const parsed = parseMapAsset(map);
-  writeFileSync(getPublishedMapAssetPath(parsed.mapId), `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  writeFileSync(
+    getPublishedMapAssetPath(parsed.mapId),
+    `${JSON.stringify(parsed, null, 2)}\n`,
+    "utf8"
+  );
   return parsed;
 }

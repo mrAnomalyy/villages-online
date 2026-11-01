@@ -5,7 +5,13 @@ import eslintConfigPrettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    ignores: [".next/**", "dist/**", "node_modules/**", "coverage/**"],
+    ignores: [
+      "**/.next/**",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/coverage/**",
+      "**/next-env.d.ts",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

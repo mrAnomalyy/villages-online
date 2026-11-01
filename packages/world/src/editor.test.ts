@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { addChunk, appendPatrolPoint, createNpcDefinition, deleteNpcDefinition, paintWater, removeChunk, removePatrolPoint, sculptTerrain, updateNpcDefinition } from "./editor";
+import {
+  addChunk,
+  appendPatrolPoint,
+  createNpcDefinition,
+  deleteNpcDefinition,
+  paintWater,
+  removeChunk,
+  removePatrolPoint,
+  sculptTerrain,
+  updateNpcDefinition,
+} from "./editor";
 import { loadPublishedMapAsset } from "./asset-store";
 
 describe("editor map mutations", () => {

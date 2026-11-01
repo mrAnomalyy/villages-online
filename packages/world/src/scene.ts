@@ -1,8 +1,9 @@
-import type { Mesh, Scene } from "@babylonjs/core";
+import type * as BabylonCore from "@babylonjs/core";
+import type { Mesh, Scene, StandardMaterial } from "@babylonjs/core";
 import type { MapAsset, TerrainChunkDTO } from "@villages/shared";
 import { getChunkCellSize, getChunkResolution } from "./map";
 
-type BabylonCoreModule = typeof import("@babylonjs/core");
+type BabylonCoreModule = typeof BabylonCore;
 
 type TerrainChunkVisual = {
   terrainMesh: Mesh;
@@ -107,7 +108,7 @@ function syncChunkWaterMeshes(
   scene: Scene,
   chunk: TerrainChunkDTO,
   waterLevel: number,
-  waterMaterial: import("@babylonjs/core").StandardMaterial,
+  waterMaterial: StandardMaterial,
   existingWaterMeshes: Mesh[]
 ): Mesh[] {
   existingWaterMeshes.forEach((mesh) => mesh.dispose());
@@ -144,8 +145,8 @@ function createChunkVisual(
   scene: Scene,
   chunk: TerrainChunkDTO,
   waterLevel: number,
-  terrainMaterial: import("@babylonjs/core").StandardMaterial,
-  waterMaterial: import("@babylonjs/core").StandardMaterial,
+  terrainMaterial: StandardMaterial,
+  waterMaterial: StandardMaterial,
   options: Required<TerrainSceneOptions>
 ): TerrainChunkVisual {
   const { MeshBuilder } = core;
@@ -295,8 +296,13 @@ export function buildTerrainScene(
         }
       }
 
-      terrainBundle.terrainMeshes = Array.from(chunkVisuals.values(), (visual) => visual.terrainMesh);
-      terrainBundle.waterMeshes = Array.from(chunkVisuals.values()).flatMap((visual) => visual.waterMeshes);
+      terrainBundle.terrainMeshes = Array.from(
+        chunkVisuals.values(),
+        (visual) => visual.terrainMesh
+      );
+      terrainBundle.waterMeshes = Array.from(chunkVisuals.values()).flatMap(
+        (visual) => visual.waterMeshes
+      );
     },
     dispose: () => {
       chunkVisuals.forEach((visual) => disposeChunkVisual(visual));

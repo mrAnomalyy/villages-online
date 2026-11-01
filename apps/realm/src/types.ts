@@ -1,4 +1,9 @@
-import type { CharacterBodyType, EntitySnapshot, MapNpcDefinition, Vector3Like } from "@villages/shared";
+import type {
+  CharacterBodyType,
+  EntitySnapshot,
+  MapNpcDefinition,
+  Vector3Like,
+} from "@villages/shared";
 
 export type PlayerEntity = {
   id: string;

@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import type { MapAsset } from "@villages/shared";
 import { loadPublishedMapAsset, savePublishedMapAsset } from "@villages/world/asset-store";
 
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ mapId: string }> }
-) {
+export async function GET(_request: Request, context: { params: Promise<{ mapId: string }> }) {
   const { mapId } = await context.params;
   try {
     return NextResponse.json(loadPublishedMapAsset(mapId));
@@ -17,10 +14,7 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: Request,
-  context: { params: Promise<{ mapId: string }> }
-) {
+export async function PUT(request: Request, context: { params: Promise<{ mapId: string }> }) {
   const { mapId } = await context.params;
 
   try {

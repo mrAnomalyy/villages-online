@@ -30,7 +30,9 @@ export function createEmptyChunk(
     z,
     size,
     resolution,
-    heights: Array.from({ length: resolution }, () => Array.from({ length: resolution }, () => height)),
+    heights: Array.from({ length: resolution }, () =>
+      Array.from({ length: resolution }, () => height)
+    ),
     water: createWaterMask(resolution),
   };
 }
@@ -107,9 +109,7 @@ function parseMatrix<T extends number | boolean>(
       throw new Error(`${label}[${rowIndex}] must have ${size} columns.`);
     }
 
-    return row.map((entry, columnIndex) =>
-      parser(entry, `${label}[${rowIndex}][${columnIndex}]`)
-    );
+    return row.map((entry, columnIndex) => parser(entry, `${label}[${rowIndex}][${columnIndex}]`));
   });
 }
 
@@ -126,20 +126,24 @@ function parseChunk(value: unknown, chunkSize: number, defaultResolution: number
   }
 
   const matrixSize = Array.isArray(value.heights) ? value.heights.length : defaultResolution;
-  const resolution = value.resolution === undefined
-    ? matrixSize
-    : asNumber(value.resolution, "chunk.resolution");
+  const resolution =
+    value.resolution === undefined ? matrixSize : asNumber(value.resolution, "chunk.resolution");
   if (resolution <= 0 || !Number.isInteger(resolution)) {
     throw new Error(`chunk ${x}:${z} resolution must be a positive integer.`);
   }
 
   const heights = parseMatrix(value.heights, resolution, `chunk ${x}:${z} heights`, asNumber);
-  const water = parseMatrix(value.water, resolution, `chunk ${x}:${z} water`, (entry, entryLabel) => {
-    if (typeof entry !== "boolean") {
-      throw new Error(`${entryLabel} must be boolean.`);
+  const water = parseMatrix(
+    value.water,
+    resolution,
+    `chunk ${x}:${z} water`,
+    (entry, entryLabel) => {
+      if (typeof entry !== "boolean") {
+        throw new Error(`${entryLabel} must be boolean.`);
+      }
+      return entry;
     }
-    return entry;
-  });
+  );
 
   return {
     id: asString(value.id, "chunk.id"),

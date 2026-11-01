@@ -12,9 +12,7 @@ const environment = process.argv[2];
 const target = process.argv[3];
 
 if (!["dev", "prod"].includes(environment) || !target || !Object.hasOwn(targets, target)) {
-  console.error(
-    `Usage: node scripts/build-image.mjs dev|prod ${Object.keys(targets).join("|")}`
-  );
+  console.error(`Usage: node scripts/build-image.mjs dev|prod ${Object.keys(targets).join("|")}`);
   process.exit(1);
 }
 
@@ -37,17 +35,13 @@ const composeFiles =
 
 console.log(`Building ${environment} image target "${target}" with tag "${imageTag}".`);
 
-const build = spawnSync(
-  "docker",
-  ["compose", ...composeFiles, "build", ...services],
-  {
-    env: {
-      ...process.env,
-      VILLAGES_IMAGE_TAG: imageTag,
-    },
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  }
-);
+const build = spawnSync("docker", ["compose", ...composeFiles, "build", ...services], {
+  env: {
+    ...process.env,
+    VILLAGES_IMAGE_TAG: imageTag,
+  },
+  stdio: "inherit",
+  shell: process.platform === "win32",
+});
 
 process.exit(build.status ?? 1);

@@ -31,7 +31,12 @@ export function applyJump(entity: PlayerEntity, map: MapAsset): void {
   }
 }
 
-function moveToward(entity: NpcEntity, target: Vector3Like, deltaSeconds: number, map: MapAsset): number {
+function moveToward(
+  entity: NpcEntity,
+  target: Vector3Like,
+  deltaSeconds: number,
+  map: MapAsset
+): number {
   const dx = target.x - entity.position.x;
   const dz = target.z - entity.position.z;
   const distance = Math.hypot(dx, dz);
@@ -46,7 +51,9 @@ function moveToward(entity: NpcEntity, target: Vector3Like, deltaSeconds: number
   return distance;
 }
 
-function nextWanderTarget(entity: Extract<NpcEntity, { behavior: { type: "wandering" } }>): Vector3Like {
+function nextWanderTarget(
+  entity: Extract<NpcEntity, { behavior: { type: "wandering" } }>
+): Vector3Like {
   const angle = Math.random() * Math.PI * 2;
   const radius = Math.random() * entity.behavior.radius;
   return {
@@ -83,7 +90,10 @@ export function stepNpc(entity: NpcEntity, deltaSeconds: number, map: MapAsset):
   }
 }
 
-export function withChunk(snapshot: Omit<EntitySnapshot, "chunkId">, chunkSize?: number): EntitySnapshot {
+export function withChunk(
+  snapshot: Omit<EntitySnapshot, "chunkId">,
+  chunkSize?: number
+): EntitySnapshot {
   return {
     ...snapshot,
     chunkId: resolveChunkIdForPosition(snapshot.position.x, snapshot.position.z, chunkSize),

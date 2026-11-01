@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import type { MapAsset } from "@villages/shared";
-import type { Engine, Mesh, Scene } from "@babylonjs/core";
+import type * as BabylonCore from "@babylonjs/core";
+import type { Engine, Mesh, Scene, StandardMaterial } from "@babylonjs/core";
 import { buildTerrainScene, getChunkAt, getChunkResolution, getHeightAt } from "@villages/world";
 
 type TerrainPick = {
@@ -28,7 +29,7 @@ type Props = {
   onCameraHeadingChange: (headingDegrees: number) => void;
 };
 
-type BabylonCoreModule = typeof import("@babylonjs/core");
+type BabylonCoreModule = typeof BabylonCore;
 
 type SceneHandles = {
   core: BabylonCoreModule;
@@ -38,10 +39,10 @@ type SceneHandles = {
   chunkHighlight: Mesh | null;
   patrolPath: Mesh | null;
   brushPreview: Mesh | null;
-  brushPreviewMaterial: import("@babylonjs/core").StandardMaterial;
-  chunkHighlightMaterial: import("@babylonjs/core").StandardMaterial;
-  npcMaterial: import("@babylonjs/core").StandardMaterial;
-  selectedNpcMaterial: import("@babylonjs/core").StandardMaterial;
+  brushPreviewMaterial: StandardMaterial;
+  chunkHighlightMaterial: StandardMaterial;
+  npcMaterial: StandardMaterial;
+  selectedNpcMaterial: StandardMaterial;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -498,7 +499,7 @@ export function EditorCanvas({
       engine.runRenderLoop(() => {
         const movement = movementKeysRef.current;
         if (movement.forward || movement.backward || movement.left || movement.right) {
-          const deltaSeconds = engine?.getDeltaTime() ? (engine.getDeltaTime() / 1000) : 0.016;
+          const deltaSeconds = engine?.getDeltaTime() ? engine.getDeltaTime() / 1000 : 0.016;
           const speed = Math.max(14, camera.radius * 0.9) * deltaSeconds;
           const horizontal = (movement.left ? 1 : 0) - (movement.right ? 1 : 0);
           const vertical = (movement.forward ? 1 : 0) - (movement.backward ? 1 : 0);
@@ -564,12 +565,7 @@ export function EditorCanvas({
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="editor-canvas"
-      data-testid="editor-canvas"
-      tabIndex={0}
-    />
+    <canvas ref={canvasRef} className="editor-canvas" data-testid="editor-canvas" tabIndex={0} />
   );
 
   function syncScene(handles: SceneHandles) {
@@ -664,7 +660,8 @@ export function EditorCanvas({
         `patrol-${selectedNpc.id}`,
         {
           points: selectedNpc.behavior.points.map(
-            (point) => new Vector3(point.x, getHeightAt(activeMap, point.x, point.z) + 0.25, point.z)
+            (point) =>
+              new Vector3(point.x, getHeightAt(activeMap, point.x, point.z) + 0.25, point.z)
           ),
         },
         scene

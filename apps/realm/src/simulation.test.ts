@@ -1,17 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { applyJump, createNpc, stepNpc } from "./simulation";
 import type { PlayerEntity } from "./types";
+import { getHeightAt } from "@villages/world";
 import { loadPublishedMapAsset } from "@villages/world/asset-store";
 
 describe("realm simulation", () => {
   it("applies jump only from the ground", () => {
     const map = loadPublishedMapAsset();
+    const ground = getHeightAt(map, 8, 8) + 1;
     const player: PlayerEntity = {
       id: "c1",
       playerId: "p1",
       label: "Hero",
       bodyType: "male",
-      position: { x: 8, y: 6, z: 8 },
+      position: { x: 8, y: ground, z: 8 },
       velocityY: 0,
       direction: { x: 0, z: 0 },
     };
@@ -44,6 +46,7 @@ describe("realm simulation", () => {
 
   it("keeps standing npc grounded", () => {
     const map = loadPublishedMapAsset();
+    const ground = getHeightAt(map, 7, 7) + 1;
     const npc = createNpc(
       {
         id: "npc2",
@@ -55,7 +58,7 @@ describe("realm simulation", () => {
     );
 
     stepNpc(npc, 0.5, map);
-    expect(npc.position.y).toBeCloseTo(7);
+    expect(npc.position.y).toBeCloseTo(ground);
   });
 
   it("assigns a wandering target and moves", () => {

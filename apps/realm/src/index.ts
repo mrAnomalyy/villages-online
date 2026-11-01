@@ -10,7 +10,12 @@ import {
   type InitialWorldPayload,
   type ServerSocketMessage,
 } from "@villages/shared";
-import { getChunksAroundPosition, getHeightAt, getNeighborChunks, TEST_MAP_ID } from "@villages/world";
+import {
+  getChunksAroundPosition,
+  getHeightAt,
+  getNeighborChunks,
+  TEST_MAP_ID,
+} from "@villages/world";
 import { getPublishedMapAssetPath, loadPublishedMapAsset } from "@villages/world/asset-store";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
 import type { PlayerEntity } from "./types";
@@ -55,27 +60,33 @@ const sockets = new Map<string, WebSocket>();
 let visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
 
 function asPlayerSnapshot(player: PlayerEntity) {
-  return withChunk({
-    id: player.id,
-    kind: "player" as const,
-    label: player.label,
-    bodyType: player.bodyType,
-    position: player.position,
-    velocityY: player.velocityY,
-  }, worldMap.chunkSize);
+  return withChunk(
+    {
+      id: player.id,
+      kind: "player" as const,
+      label: player.label,
+      bodyType: player.bodyType,
+      position: player.position,
+      velocityY: player.velocityY,
+    },
+    worldMap.chunkSize
+  );
 }
 
 function broadcastSnapshots(): void {
   const entities = [
     ...Array.from(players.values()).map(asPlayerSnapshot),
     ...visibleNpcs.map((npc) =>
-      withChunk({
-        id: npc.id,
-        kind: "npc" as const,
-        label: npc.label,
-        position: npc.position,
-        velocityY: npc.velocityY,
-      }, worldMap.chunkSize)
+      withChunk(
+        {
+          id: npc.id,
+          kind: "npc" as const,
+          label: npc.label,
+          position: npc.position,
+          velocityY: npc.velocityY,
+        },
+        worldMap.chunkSize
+      )
     ),
   ];
 
@@ -243,13 +254,16 @@ wss.on("connection", (socket) => {
             .filter((otherPlayer) => otherPlayer.id !== player.id)
             .map(asPlayerSnapshot),
           ...visibleNpcs.map((npc) =>
-            withChunk({
-              id: npc.id,
-              kind: "npc",
-              label: npc.label,
-              position: npc.position,
-              velocityY: npc.velocityY,
-            }, worldMap.chunkSize)
+            withChunk(
+              {
+                id: npc.id,
+                kind: "npc",
+                label: npc.label,
+                position: npc.position,
+                velocityY: npc.velocityY,
+              },
+              worldMap.chunkSize
+            )
           ),
         ],
       };

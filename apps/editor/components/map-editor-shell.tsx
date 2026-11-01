@@ -281,11 +281,12 @@ export function MapEditorShell() {
     const position = selectedChunk
       ? {
           x: selectedChunk.x * selectedChunk.size + selectedChunk.size / 2,
-          y: getHeightAt(
-            map,
-            selectedChunk.x * selectedChunk.size + selectedChunk.size / 2,
-            selectedChunk.z * selectedChunk.size + selectedChunk.size / 2
-          ) + 1,
+          y:
+            getHeightAt(
+              map,
+              selectedChunk.x * selectedChunk.size + selectedChunk.size / 2,
+              selectedChunk.z * selectedChunk.size + selectedChunk.size / 2
+            ) + 1,
           z: selectedChunk.z * selectedChunk.size + selectedChunk.size / 2,
         }
       : { x: 8, y: 1, z: 8 };
@@ -302,20 +303,15 @@ export function MapEditorShell() {
 
     setSaving(true);
     try {
-      const response = await readJson<{ map: MapAsset; action: string }>(
-        `/api/maps/${map.mapId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ map, action }),
-        }
-      );
+      const response = await readJson<{ map: MapAsset; action: string }>(`/api/maps/${map.mapId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ map, action }),
+      });
       setMap(response.map);
       setDirty(false);
       setStatus(
-        action === "publish"
-          ? "Published map asset. Restart realms to apply."
-          : "Saved map asset."
+        action === "publish" ? "Published map asset. Restart realms to apply." : "Saved map asset."
       );
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Map save failed.");
@@ -373,12 +369,14 @@ export function MapEditorShell() {
                   <span className="meta">{dirty ? "Unsaved" : "Saved"}</span>
                 </div>
                 <div className="mode-grid">
-                  {([
-                    ["chunk", "C"],
-                    ["terrain", "Q"],
-                    ["water", "E"],
-                    ["npc", "N"],
-                  ] as const).map(([nextMode, key]) => (
+                  {(
+                    [
+                      ["chunk", "C"],
+                      ["terrain", "Q"],
+                      ["water", "E"],
+                      ["npc", "N"],
+                    ] as const
+                  ).map(([nextMode, key]) => (
                     <button
                       key={nextMode}
                       className="mode-button"
@@ -442,18 +440,14 @@ export function MapEditorShell() {
                   </button>
                 </div>
                 <p className="meta">
-                  Hold `Alt` to invert temporarily.
-                  {" "}
+                  Hold `Alt` to invert temporarily.{" "}
                   {effectiveTerrainDelta > 0 ? "Currently raising." : "Currently lowering."}
                 </p>
                 <div className="segmented">
                   <button data-active={paintWaterValue} onClick={() => setPaintWaterValue(true)}>
                     Paint Water
                   </button>
-                  <button
-                    data-active={!paintWaterValue}
-                    onClick={() => setPaintWaterValue(false)}
-                  >
+                  <button data-active={!paintWaterValue} onClick={() => setPaintWaterValue(false)}>
                     Clear Water
                   </button>
                 </div>
@@ -643,7 +637,10 @@ export function MapEditorShell() {
 
         <div className="legend legend-overlay">
           <span>Hold left mouse to keep painting. Mouse wheel only zooms the canvas.</span>
-          <span>`WASD` pans anytime. `Space` + drag also pans. NPC mode still clicks to move or add patrol points.</span>
+          <span>
+            `WASD` pans anytime. `Space` + drag also pans. NPC mode still clicks to move or add
+            patrol points.
+          </span>
         </div>
       </section>
     </main>

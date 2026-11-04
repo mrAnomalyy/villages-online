@@ -272,9 +272,18 @@ Whenever a task modifies visual components, UI overlays, HUD elements, canvas re
      - _State C: Result / Populated State_ (e.g., in-world 3D speech bubble above avatar, populated undo stack with active counters).
 2. **Automated Capture with Playwright**:
    - Use Playwright headless Chromium to load the built app, perform user interactions (`click`, `fill`, `hover`), and call `await page.screenshot({ path: "assets/screenshots/<feature>-<state>.png" })`.
-3. **Commit & Embed in PR**:
+3. **Stale Bundle Prevention (Rebuild Before Capture)**:
+   - Next.js `next start` serves pre-compiled artifacts from `.next/`. Any changes made to React components, styling, or packages will **not** appear if `next start` is run against an older build.
+   - **Rule**: Always run `yarn --cwd apps/<app> build` (or full `yarn build`) immediately before starting the server to capture visual verification screenshots.
+4. **Camera Framing & Visible 3D Differentiation**:
+   - In 3D Babylon.js viewports (`apps/web`, `apps/editor`), ensure changes are actually within the camera frustum. A single chunk often fills the entire default view. When mutating adjacent chunks, placing objects, or sculpting, zoom the camera out (`await page.mouse.wheel(0, 300)`) or pan (`WASD`) so the mutations are framed clearly rather than occurring off-screen.
+   - Screenshots must show **unmistakable differences**: active vs disabled button states, dynamic badge counters (`(1)`, `(2)`), status bar readouts, and physical 3D scene modifications (chunks added/removed, entities spawned, terrain displaced).
+5. **Mandatory Visual Inspection**:
+   - Agents must inspect captured screenshots using `read_file` to confirm that buttons, HUD overlays, and 3D mutations are genuinely rendered before committing to git.
+6. **Commit & Embed in PR**:
    - Commit screenshots into `assets/screenshots/` on the feature branch.
    - Reference the screenshots in the PR description or PR comment using raw GitHub links:
+
      ```markdown
      ### Visual Verification
 

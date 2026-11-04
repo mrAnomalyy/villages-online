@@ -499,22 +499,6 @@ export function MapEditorShell() {
             <div className="toolbar-actions">
               <button
                 className="secondary-button"
-                disabled={!canUndo(history)}
-                onClick={handleUndo}
-                title="Undo (⌘Z / Ctrl+Z)"
-              >
-                Undo {history.undoStack.length > 0 ? `(${history.undoStack.length})` : ""}
-              </button>
-              <button
-                className="secondary-button"
-                disabled={!canRedo(history)}
-                onClick={handleRedo}
-                title="Redo (⇧⌘Z / Ctrl+Y)"
-              >
-                Redo {history.redoStack.length > 0 ? `(${history.redoStack.length})` : ""}
-              </button>
-              <button
-                className="secondary-button"
                 onClick={() => setControlsCollapsed((value) => !value)}
               >
                 {controlsCollapsed ? "Expand" : "Collapse"}
@@ -534,6 +518,28 @@ export function MapEditorShell() {
                 Publish
               </button>
             </div>
+          </div>
+          <div className="history-toolbar-row">
+            <button
+              className="history-button"
+              data-testid="undo-button"
+              disabled={!canUndo(history)}
+              onClick={handleUndo}
+              title="Undo (⌘Z / Ctrl+Z)"
+            >
+              <span>↶</span> Undo{" "}
+              {history.undoStack.length > 0 ? `(${history.undoStack.length})` : ""}
+            </button>
+            <button
+              className="history-button"
+              data-testid="redo-button"
+              disabled={!canRedo(history)}
+              onClick={handleRedo}
+              title="Redo (⇧⌘Z / Ctrl+Y)"
+            >
+              <span>↷</span> Redo{" "}
+              {history.redoStack.length > 0 ? `(${history.redoStack.length})` : ""}
+            </button>
           </div>
           <p className="toolbar-status">{status}</p>
           {!controlsCollapsed ? (

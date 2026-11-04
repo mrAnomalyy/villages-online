@@ -239,6 +239,7 @@ Before finishing any task or opening a pull request:
 7. The active Kanzo task card has been transitioned to `review` with a completion comment.
 8. The human developer has been notified in chat with the PR link and a concise progress summary.
 9. **Visual Verification Screenshots**: For any user-facing, client, or editor feature (`apps/web`, `apps/editor`), capture multiple Playwright screenshots demonstrating distinct states of the feature (e.g. idle/initial state, active/interaction state, and toggled/result state). Commit screenshots to `assets/screenshots/` and embed them in the PR description or initial comment for visual review.
+10. **Process Teardown & Resource Hygiene**: Terminate all temporary development servers, background tasks, Next.js instances, simulation processes, and headless browser instances immediately after testing or screenshot capture. Verify that no orphan background tasks (`manage_task`) or listening ports remain running before concluding your turn or handing off to review.
 
 ---
 
@@ -291,3 +292,24 @@ Whenever a task modifies visual components, UI overlays, HUD elements, canvas re
      | :------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------: |
      | ![Initial](https://raw.githubusercontent.com/mrAnomalyy/villages-online/<branch>/assets/screenshots/<feature>-initial.png) | ![Active](https://raw.githubusercontent.com/mrAnomalyy/villages-online/<branch>/assets/screenshots/<feature>-active.png) | ![Result](https://raw.githubusercontent.com/mrAnomalyy/villages-online/<branch>/assets/screenshots/<feature>-result.png) |
      ```
+
+---
+
+## 11. Resource Hygiene & Process Teardown (Laptop Thermals & Battery Protection)
+
+Running long-lived background servers (Next.js `next start`/`next dev`, Realm simulation tick loops, headless Chromium browsers, or watch mode runners) causes sustained high CPU load, rapid battery drain, and thermal throttling (laptop reaching 75°C+ CPU / 40°C+ battery).
+
+Agents must adhere strictly to these operational rules:
+
+1. **Ephemeral Execution**:
+   - Treat dev servers, Next.js servers, and simulation servers as strictly temporary, single-use environments.
+   - Flow: Start the server -> execute automated test/screenshot capture -> immediately stop the server using `manage_task(Action="kill")`.
+2. **Never Leave Background Servers Idling**:
+   - Do not leave Next.js, Realm WS server, or Gateway running while waiting for instructions, reporting progress, or concluding a task.
+   - Subagents must clean up and terminate all processes they started before messaging the orchestrator or exiting.
+3. **Mandatory Post-Task Teardown Verification**:
+   - Before ending a turn, reporting completion, or transitioning a Kanzo task card to `review`:
+     - Run `manage_task(Action="list")` to ensure all task runners are terminated.
+     - Check listening ports (e.g. `lsof -i :3000 -i :3001 -i :4000 -i :4321`) to ensure no orphan Node or Chromium processes remain bound to local ports.
+4. **No Watch Flags in Background**:
+   - Never run `vitest --watch`, `jest --watch`, `next dev` without explicit need, or any file watcher in background tasks. Always use single-run commands (`vitest run`, `yarn build`, `yarn test`).

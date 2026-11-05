@@ -27,13 +27,37 @@ CREATE TABLE IF NOT EXISTS world_maps (
 
 CREATE TABLE IF NOT EXISTS characters (
   id VARCHAR(64) PRIMARY KEY,
-  account_token_hash VARCHAR(64) NOT NULL,
-  name VARCHAR(64) NOT NULL,
+  player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+  realm_id TEXT REFERENCES realms(id) ON DELETE CASCADE,
+  nickname_snapshot TEXT,
+  body_type TEXT,
+  position_x DOUBLE PRECISION NOT NULL DEFAULT 8,
+  position_y DOUBLE PRECISION NOT NULL DEFAULT 0,
+  position_z DOUBLE PRECISION NOT NULL DEFAULT 8,
+  velocity_y DOUBLE PRECISION NOT NULL DEFAULT 0,
+  account_token_hash VARCHAR(64),
+  name VARCHAR(64),
   appearance JSONB NOT NULL DEFAULT '{}'::jsonb,
   last_position JSONB DEFAULT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Safe migration statements for existing databases
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS player_id UUID REFERENCES players(id) ON DELETE CASCADE;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS realm_id TEXT REFERENCES realms(id) ON DELETE CASCADE;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS nickname_snapshot TEXT;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS body_type TEXT;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS position_x DOUBLE PRECISION NOT NULL DEFAULT 8;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS position_y DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS position_z DOUBLE PRECISION NOT NULL DEFAULT 8;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS velocity_y DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS account_token_hash VARCHAR(64);
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS name VARCHAR(64);
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS appearance JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS last_position JSONB DEFAULT NULL;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 CREATE TABLE IF NOT EXISTS realm_world_state (
   realm_id TEXT PRIMARY KEY REFERENCES realms(id) ON DELETE CASCADE,
@@ -56,4 +80,6 @@ CREATE TABLE IF NOT EXISTS npc_spawns (
 
 CREATE INDEX IF NOT EXISTS idx_world_maps_owner_id ON world_maps(owner_id);
 CREATE INDEX IF NOT EXISTS idx_characters_account_token_hash ON characters(account_token_hash);
+CREATE INDEX IF NOT EXISTS idx_characters_player_id ON characters(player_id);
+CREATE INDEX IF NOT EXISTS idx_characters_realm_id ON characters(realm_id);
 

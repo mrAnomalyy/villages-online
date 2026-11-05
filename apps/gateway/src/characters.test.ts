@@ -484,5 +484,44 @@ describe("Characters API (/api/characters)", () => {
       const data = (await res.json()) as { error: string };
       expect(data.error).toContain("Forbidden");
     });
+
+    it("preserves and returns stored position_x/y/z when last_position is absent in database", async () => {
+      mockQuery.mockImplementation(async (sql: string) => {
+        const normalized = typeof sql === "string" ? sql.replace(/\s+/g, " ") : "";
+        if (normalized.includes("FROM players")) {
+          return { rowCount: 1, rows: [{ id: "p1", nickname: "PlayerOne" }] };
+        }
+        if (normalized.includes("FROM characters WHERE id = $1")) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                id: "char-xyz",
+                account_token_hash: validTokenHash,
+                name: "Sir Galahad",
+                appearance: { bodyType: "male" },
+                last_position: null,
+                position_x: 25.5,
+                position_y: 3.0,
+                position_z: 42.1,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              },
+            ],
+          };
+        }
+        return { rowCount: 0, rows: [] };
+      });
+
+      const res = await fetch(`${baseUrl}/char-xyz`, {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as CharacterProfile;
+      expect(data.id).toBe("char-xyz");
+      expect(data.name).toBe("Sir Galahad");
+      expect(data.lastPosition).toBeDefined();
+    });
   });
 });

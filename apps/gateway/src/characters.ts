@@ -5,15 +5,8 @@ import type { Pool } from "pg";
 import { sanitizeNickname } from "@villages/shared";
 import { hashToken } from "./auth";
 
-export interface CharacterProfile {
-  id: string;
-  name: string;
-  appearance: Record<string, unknown>;
-  last_position: Record<string, unknown> | null;
-  lastPosition?: Record<string, unknown> | null;
-  created_at: string | Date;
-  updated_at: string | Date;
-}
+import type { CharacterProfile, CharacterAppearance } from "@villages/shared";
+export type { CharacterProfile, CharacterAppearance };
 
 export function extractBearerToken(req: Request): string | null {
   const header = req.header("authorization") || req.header("Authorization");
@@ -199,6 +192,15 @@ export function createCharactersRouter(pool: Pool): Router {
           }
 
           // Update existing
+          const bodyType =
+            typeof appearance === "object" && appearance !== null && "bodyType" in appearance
+              ? String(appearance.bodyType)
+              : null;
+          const posObj = lastPosition && typeof lastPosition === "object" ? lastPosition : null;
+          const posX = posObj && "x" in posObj ? Number(posObj.x) : null;
+          const posY = posObj && "y" in posObj ? Number(posObj.y) : null;
+          const posZ = posObj && "z" in posObj ? Number(posObj.z) : null;
+
           const updated = await pool.query<{
             id: string;
             name: string;
@@ -209,15 +211,26 @@ export function createCharactersRouter(pool: Pool): Router {
           }>(
             `UPDATE characters
              SET name = $1,
+                 nickname_snapshot = $1,
                  appearance = $2,
-                 last_position = COALESCE($3, last_position),
+                 body_type = COALESCE($3, body_type),
+                 last_position = COALESCE($4, last_position),
+                 position_x = COALESCE($5, position_x),
+                 position_y = COALESCE($6, position_y),
+                 position_z = COALESCE($7, position_z),
+                 player_id = COALESCE(player_id, $8),
                  updated_at = CURRENT_TIMESTAMP
-             WHERE id = $4 AND account_token_hash = $5
+             WHERE id = $9 AND account_token_hash = $10
              RETURNING id, name, appearance, last_position, created_at, updated_at`,
             [
               name,
               JSON.stringify(appearance),
+              bodyType,
               lastPosition ? JSON.stringify(lastPosition) : null,
+              posX,
+              posY,
+              posZ,
+              auth.playerId ?? null,
               requestedId,
               auth.tokenHash,
             ]
@@ -255,6 +268,15 @@ export function createCharactersRouter(pool: Pool): Router {
 
       // Create new character
       const characterId = requestedId ?? crypto.randomUUID();
+      const bodyType =
+        typeof appearance === "object" && appearance !== null && "bodyType" in appearance
+          ? String(appearance.bodyType)
+          : "male";
+      const posObj = lastPosition && typeof lastPosition === "object" ? lastPosition : null;
+      const posX = posObj && "x" in posObj ? Number(posObj.x) : 8;
+      const posY = posObj && "y" in posObj ? Number(posObj.y) : 1;
+      const posZ = posObj && "z" in posObj ? Number(posObj.z) : 8;
+
       const inserted = await pool.query<{
         id: string;
         name: string;
@@ -263,8 +285,12 @@ export function createCharactersRouter(pool: Pool): Router {
         created_at: Date | string;
         updated_at: Date | string;
       }>(
-        `INSERT INTO characters (id, account_token_hash, name, appearance, last_position, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `INSERT INTO characters (
+           id, account_token_hash, name, appearance, last_position,
+           player_id, nickname_snapshot, body_type, position_x, position_y, position_z, velocity_y,
+           created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          RETURNING id, name, appearance, last_position, created_at, updated_at`,
         [
           characterId,
@@ -272,6 +298,12 @@ export function createCharactersRouter(pool: Pool): Router {
           name,
           JSON.stringify(appearance),
           lastPosition ? JSON.stringify(lastPosition) : null,
+          auth.playerId ?? null,
+          name,
+          bodyType,
+          posX,
+          posY,
+          posZ,
         ]
       );
 

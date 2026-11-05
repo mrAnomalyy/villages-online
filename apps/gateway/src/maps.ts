@@ -9,6 +9,8 @@ export interface MapSummary {
   id: string;
   name: string;
   owner_id: string | null;
+  chunk_count?: number;
+  chunkCount?: number;
   updated_at: string | Date;
 }
 
@@ -82,26 +84,33 @@ export function createMapsRouter(pool: Pool): Router {
     }
   });
 
-  // GET /api/maps: List all available saved maps (id, name, owner_id, updated_at)
+  // GET /api/maps: List all available saved maps (id, name, owner_id, chunk_count, updated_at)
   router.get("/", async (_req: Request, res: Response) => {
     try {
       const result = await pool.query<{
         id: string;
         name: string;
         owner_id: string | null;
+        chunk_count?: number | string;
         updated_at: Date | string;
       }>(
-        `SELECT id, name, owner_id, updated_at
+        `SELECT id, name, owner_id, jsonb_array_length(COALESCE(data->'chunks', '[]'::jsonb)) AS chunk_count, updated_at
          FROM world_maps
          ORDER BY updated_at DESC`
       );
 
-      const summaries: MapSummary[] = result.rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        owner_id: row.owner_id,
-        updated_at: row.updated_at,
-      }));
+      const summaries: MapSummary[] = result.rows.map((row) => {
+        const count =
+          row.chunk_count !== null && row.chunk_count !== undefined ? Number(row.chunk_count) : 0;
+        return {
+          id: row.id,
+          name: row.name,
+          owner_id: row.owner_id,
+          chunk_count: count,
+          chunkCount: count,
+          updated_at: row.updated_at,
+        };
+      });
 
       res.status(200).json(summaries);
     } catch (error) {

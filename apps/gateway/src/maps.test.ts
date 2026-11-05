@@ -4,6 +4,7 @@ import express from "express";
 import type { Pool } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MapAsset } from "@villages/shared";
+import type { MapSummary } from "./maps";
 import { createMapsRouter } from "./maps";
 
 describe("Maps API (/api/maps)", () => {
@@ -228,12 +229,14 @@ describe("Maps API (/api/maps)", () => {
           id: "map-1",
           name: "Map 1",
           owner_id: "user-1",
+          chunk_count: 4,
           updated_at: new Date("2026-11-05T00:00:00Z").toISOString(),
         },
         {
           id: "map-2",
           name: "Map 2",
           owner_id: null,
+          chunk_count: 1,
           updated_at: new Date("2026-11-04T00:00:00Z").toISOString(),
         },
       ];
@@ -245,13 +248,15 @@ describe("Maps API (/api/maps)", () => {
 
       const res = await fetch(baseUrl);
       expect(res.status).toBe(200);
-      const data = (await res.json()) as typeof rows;
+      const data = (await res.json()) as (MapSummary & { chunkCount?: number })[];
       expect(Array.isArray(data)).toBe(true);
       expect(data.length).toBe(2);
       expect(data[0].id).toBe("map-1");
       expect(data[0].name).toBe("Map 1");
       expect(data[0].owner_id).toBe("user-1");
+      expect(data[0].chunkCount).toBe(4);
       expect(data[1].owner_id).toBeNull();
+      expect(data[1].chunkCount).toBe(1);
     });
 
     it("returns 200 with empty array when no maps saved", async () => {

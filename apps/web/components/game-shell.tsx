@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CharacterBodyType,
   CharacterSummary,
+  EntityDespawnMessage,
   GuestAuthResponse,
   InitialWorldPayload,
   RealmDescriptor,
@@ -65,6 +66,7 @@ export function GameShell() {
   const [character, setCharacter] = useState<CharacterSummary | null>(null);
   const [world, setWorld] = useState<InitialWorldPayload | null>(null);
   const [entities, setEntities] = useState<EntitySnapshot[]>([]);
+  const [lastDespawnMessage, setLastDespawnMessage] = useState<EntityDespawnMessage | null>(null);
   const [loadedChunkIds, setLoadedChunkIds] = useState<string[]>([]);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [status, setStatus] = useState("Waiting for a traveler.");
@@ -244,6 +246,13 @@ export function GameShell() {
           return;
         }
 
+        if (message.type === "entityDespawn") {
+          setEntities((current) => current.filter((entity) => entity.id !== message.entityId));
+          setLastDespawnMessage(message);
+          window.dispatchEvent(new CustomEvent("villages:entityDespawn", { detail: message }));
+          return;
+        }
+
         if (message.type === "error") {
           reject(new Error(message.message));
         }
@@ -336,6 +345,7 @@ export function GameShell() {
             entities={entities}
             onMove={handleMove}
             onJump={handleJump}
+            lastDespawnMessage={lastDespawnMessage}
           />
         </div>
       </div>

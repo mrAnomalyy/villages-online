@@ -14,11 +14,13 @@ import {
   getChunksAroundPosition,
   getHeightAt,
   getNeighborChunks,
+  resolveChunkIdForPosition,
   TEST_MAP_ID,
 } from "@villages/world";
 import { getPublishedMapAssetPath, loadPublishedMapAsset } from "@villages/world/asset-store";
 import { applyJump, applyMovement, createNpc, stepNpc, withChunk } from "./simulation";
-import type { PlayerEntity } from "./types";
+import { get3x3ChunkIds, SpatialGrid } from "./spatial-grid";
+import type { NpcEntity, PlayerEntity } from "./types";
 
 const port = Number(process.env.PORT ?? 4101);
 const realmId = process.env.REALM_ID ?? "alpha";
@@ -57,7 +59,27 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 const players = new Map<string, PlayerEntity>();
 const sockets = new Map<string, WebSocket>();
+const spatialGrid = new SpatialGrid();
+const socketSubscribedEntities = new Map<string, Set<string>>();
+
+function indexNpc(npc: NpcEntity): void {
+  const chunkId = resolveChunkIdForPosition(npc.position.x, npc.position.z, worldMap.chunkSize);
+  spatialGrid.update(npc.id, chunkId);
+}
+
+function indexPlayer(player: PlayerEntity): void {
+  const chunkId = resolveChunkIdForPosition(
+    player.position.x,
+    player.position.z,
+    worldMap.chunkSize
+  );
+  spatialGrid.update(player.id, chunkId);
+}
+
 let visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
+for (const npc of visibleNpcs) {
+  indexNpc(npc);
+}
 
 function asPlayerSnapshot(player: PlayerEntity) {
   return withChunk(
@@ -74,9 +96,13 @@ function asPlayerSnapshot(player: PlayerEntity) {
 }
 
 function broadcastSnapshots(): void {
-  const entities = [
-    ...Array.from(players.values()).map(asPlayerSnapshot),
-    ...visibleNpcs.map((npc) =>
+  const allEntitySnapshots = new Map<string, ReturnType<typeof asPlayerSnapshot>>();
+  for (const player of players.values()) {
+    allEntitySnapshots.set(player.id, asPlayerSnapshot(player));
+  }
+  for (const npc of visibleNpcs) {
+    allEntitySnapshots.set(
+      npc.id,
       withChunk(
         {
           id: npc.id,
@@ -87,23 +113,51 @@ function broadcastSnapshots(): void {
         },
         worldMap.chunkSize
       )
-    ),
-  ];
+    );
+  }
 
   for (const [characterId, socket] of sockets.entries()) {
     if (socket.readyState !== WebSocket.OPEN) {
       continue;
     }
-    const self = entities.find((entity) => entity.id === characterId);
+    const self = allEntitySnapshots.get(characterId);
     if (!self) {
       continue;
     }
+
+    const playerChunkId = self.chunkId;
+    const neighborChunkIds = get3x3ChunkIds(playerChunkId);
+    const inRangeEntityIds = spatialGrid.getEntitiesInChunks(neighborChunkIds);
+    inRangeEntityIds.delete(characterId);
+
+    const prevSubscribed = socketSubscribedEntities.get(characterId) ?? new Set<string>();
+
+    for (const prevId of prevSubscribed) {
+      if (!inRangeEntityIds.has(prevId)) {
+        const despawnPayload: ServerSocketMessage = {
+          type: "entityDespawn",
+          entityId: prevId,
+        };
+        socket.send(JSON.stringify(despawnPayload));
+      }
+    }
+
+    const visibleEntities: ReturnType<typeof asPlayerSnapshot>[] = [];
+    for (const entityId of inRangeEntityIds) {
+      const entity = allEntitySnapshots.get(entityId);
+      if (entity) {
+        visibleEntities.push(entity);
+      }
+    }
+
     const payload: ServerSocketMessage = {
       type: "snapshot",
       self,
-      entities: entities.filter((entity) => entity.id !== characterId),
+      entities: visibleEntities,
     };
     socket.send(JSON.stringify(payload));
+
+    socketSubscribedEntities.set(characterId, inRangeEntityIds);
   }
 }
 
@@ -119,8 +173,17 @@ function sendChunksForPlayer(player: PlayerEntity, socket: WebSocket): void {
 function reloadWorldMap(): void {
   try {
     const nextMap = loadPublishedMapAsset(mapId);
+    for (const npc of visibleNpcs) {
+      spatialGrid.remove(npc.id);
+    }
     worldMap = nextMap;
     visibleNpcs = worldMap.npcs.map((npc) => createNpc(npc, worldMap));
+    for (const npc of visibleNpcs) {
+      indexNpc(npc);
+    }
+    for (const player of players.values()) {
+      indexPlayer(player);
+    }
 
     for (const [characterId, socket] of sockets.entries()) {
       if (socket.readyState !== WebSocket.OPEN) {
@@ -240,20 +303,23 @@ wss.on("connection", (socket) => {
       players.set(player.id, player);
       sockets.set(player.id, socket);
       currentCharacterId = player.id;
+      indexPlayer(player);
       await redis.del(`join:${message.ticket}`);
 
-      const initial: InitialWorldPayload = {
-        realmId,
-        playerId: player.playerId,
-        characterId: player.id,
-        mapId: worldMap.mapId,
-        chunks: getChunksAroundPosition(worldMap, player.position.x, player.position.z),
-        player: asPlayerSnapshot(player),
-        entities: [
-          ...Array.from(players.values())
-            .filter((otherPlayer) => otherPlayer.id !== player.id)
-            .map(asPlayerSnapshot),
-          ...visibleNpcs.map((npc) =>
+      const playerSnapshot = asPlayerSnapshot(player);
+      const neighborChunkIds = get3x3ChunkIds(playerSnapshot.chunkId);
+      const inRangeEntityIds = spatialGrid.getEntitiesInChunks(neighborChunkIds);
+      inRangeEntityIds.delete(player.id);
+
+      const initialEntities: ReturnType<typeof asPlayerSnapshot>[] = [];
+      for (const otherPlayer of players.values()) {
+        if (otherPlayer.id !== player.id && inRangeEntityIds.has(otherPlayer.id)) {
+          initialEntities.push(asPlayerSnapshot(otherPlayer));
+        }
+      }
+      for (const npc of visibleNpcs) {
+        if (inRangeEntityIds.has(npc.id)) {
+          initialEntities.push(
             withChunk(
               {
                 id: npc.id,
@@ -264,8 +330,20 @@ wss.on("connection", (socket) => {
               },
               worldMap.chunkSize
             )
-          ),
-        ],
+          );
+        }
+      }
+
+      socketSubscribedEntities.set(player.id, inRangeEntityIds);
+
+      const initial: InitialWorldPayload = {
+        realmId,
+        playerId: player.playerId,
+        characterId: player.id,
+        mapId: worldMap.mapId,
+        chunks: getChunksAroundPosition(worldMap, player.position.x, player.position.z),
+        player: playerSnapshot,
+        entities: initialEntities,
       };
       socket.send(
         JSON.stringify({ type: "welcome", payload: initial } satisfies ServerSocketMessage)
@@ -310,8 +388,10 @@ wss.on("connection", (socket) => {
     if (character) {
       await persistCharacter(character);
       players.delete(currentCharacterId);
+      spatialGrid.remove(currentCharacterId);
     }
     sockets.delete(currentCharacterId);
+    socketSubscribedEntities.delete(currentCharacterId);
   });
 });
 
@@ -319,9 +399,11 @@ setInterval(() => {
   const deltaSeconds = 1 / TICK_RATE;
   for (const player of players.values()) {
     applyMovement(player, deltaSeconds, worldMap);
+    indexPlayer(player);
   }
   for (const npc of visibleNpcs) {
     stepNpc(npc, deltaSeconds, worldMap);
+    indexNpc(npc);
   }
   broadcastSnapshots();
 }, 1000 / TICK_RATE);

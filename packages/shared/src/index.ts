@@ -145,6 +145,11 @@ export type ClientSocketMessage =
       centerChunkId: string;
     };
 
+export type EntityDespawnMessage = {
+  type: "entityDespawn";
+  entityId: string;
+};
+
 export type ServerSocketMessage =
   | {
       type: "welcome";
@@ -162,7 +167,8 @@ export type ServerSocketMessage =
   | {
       type: "error";
       message: string;
-    };
+    }
+  | EntityDespawnMessage;
 
 export const PLAYER_SPEED = 6;
 export const JUMP_VELOCITY = 7;

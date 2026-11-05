@@ -270,6 +270,45 @@ button {
   font-size: 0.82rem;
 }
 
+.history-toolbar-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.history-button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 600;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.history-button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.history-button:not(:disabled) {
+  background: rgba(240, 169, 75, 0.18);
+  border-color: rgba(240, 169, 75, 0.45);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(240, 169, 75, 0.15);
+}
+
+.history-button:not(:disabled):hover {
+  background: rgba(240, 169, 75, 0.28);
+}
+
 .primary-button,
 .secondary-button,
 .danger-button,

@@ -1,19 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { MapAsset, MapNpcDefinition, NpcBehavior } from "@villages/shared";
 import {
   addChunk,
   appendPatrolPoint,
+  canRedo,
+  canUndo,
+  createHistoryState,
   createNpcDefinition,
   deleteNpcDefinition,
+  diffMapHeights,
+  diffMapWater,
   getChunkById,
   getHeightAt,
   paintWater,
+  pushTransaction,
+  redo,
   removeChunk,
   removePatrolPoint,
   sculptTerrain,
+  undo,
   updateNpcDefinition,
+  type HistoryState,
 } from "@villages/world";
 import { EditorCanvas } from "./editor-canvas";
 
@@ -92,6 +101,38 @@ export function MapEditorShell() {
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
   const [altPressed, setAltPressed] = useState(false);
+  const [history, setHistory] = useState<HistoryState>(createHistoryState(50));
+  const strokeStartMapRef = useRef<MapAsset | null>(null);
+  const mapRef = useRef<MapAsset | null>(null);
+  const historyRef = useRef<HistoryState>(history);
+  mapRef.current = map;
+  historyRef.current = history;
+
+  const handleUndo = () => {
+    if (!mapRef.current || !canUndo(historyRef.current)) {
+      return;
+    }
+    const result = undo(mapRef.current, historyRef.current);
+    if (result) {
+      setMap(result.map);
+      setHistory(result.state);
+      setDirty(true);
+      setStatus(`Undo: ${result.transaction.description ?? result.transaction.type}`);
+    }
+  };
+
+  const handleRedo = () => {
+    if (!mapRef.current || !canRedo(historyRef.current)) {
+      return;
+    }
+    const result = redo(mapRef.current, historyRef.current);
+    if (result) {
+      setMap(result.map);
+      setHistory(result.state);
+      setDirty(true);
+      setStatus(`Redo: ${result.transaction.description ?? result.transaction.type}`);
+    }
+  };
 
   useEffect(() => {
     void (async () => {
@@ -110,6 +151,22 @@ export function MapEditorShell() {
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (isEditableElement(event.target)) {
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        handleRedo();
         return;
       }
 
@@ -187,6 +244,45 @@ export function MapEditorShell() {
     setStatus(nextStatus);
   };
 
+  const handleStrokeStart = () => {
+    strokeStartMapRef.current = mapRef.current;
+  };
+
+  const handleStrokeEnd = () => {
+    const before = strokeStartMapRef.current;
+    const current = mapRef.current;
+    strokeStartMapRef.current = null;
+    if (!before || !current) {
+      return;
+    }
+
+    if (mode === "terrain") {
+      const changes = diffMapHeights(before, current);
+      if (changes.length > 0) {
+        const totalVertices = changes.reduce((acc, c) => acc + c.cells.length, 0);
+        setHistory((prev) =>
+          pushTransaction(prev, {
+            type: "sculpt_terrain",
+            changes,
+            description: `Sculpt terrain (${totalVertices} vertices)`,
+          })
+        );
+      }
+    } else if (mode === "water") {
+      const changes = diffMapWater(before, current);
+      if (changes.length > 0) {
+        const totalCells = changes.reduce((acc, c) => acc + c.cells.length, 0);
+        setHistory((prev) =>
+          pushTransaction(prev, {
+            type: "paint_water",
+            changes,
+            description: `Paint water (${totalCells} cells)`,
+          })
+        );
+      }
+    }
+  };
+
   const handleTerrainPick = (pick: TerrainPick) => {
     if (!map) {
       return;
@@ -234,22 +330,49 @@ export function MapEditorShell() {
           label: `NPC ${map.npcs.length + 1}`,
         });
         setSelectedNpcId(created.npc.id);
+        setHistory((prev) =>
+          pushTransaction(prev, {
+            type: "npc_mutate",
+            newNpc: created.npc,
+            description: `Create ${created.npc.label}`,
+          })
+        );
         applyMapUpdate(created.map, `Created ${created.npc.label}.`);
         return;
       }
 
       if (npcClickMode === "patrol") {
-        applyMapUpdate(
-          appendPatrolPoint(map, selectedNpcId, snappedPosition),
-          `Added patrol point for ${selectedNpc?.label ?? selectedNpcId}.`
-        );
+        const oldNpc = selectedNpc;
+        const nextMap = appendPatrolPoint(map, selectedNpcId, snappedPosition);
+        const updatedNpc = nextMap.npcs.find((n) => n.id === selectedNpcId);
+        if (oldNpc && updatedNpc) {
+          setHistory((prev) =>
+            pushTransaction(prev, {
+              type: "npc_mutate",
+              oldNpc,
+              newNpc: updatedNpc,
+              description: `Add patrol point for ${oldNpc.label}`,
+            })
+          );
+        }
+        applyMapUpdate(nextMap, `Added patrol point for ${selectedNpc?.label ?? selectedNpcId}.`);
         return;
       }
 
-      applyMapUpdate(
-        updateNpcDefinition(map, selectedNpcId, { position: snappedPosition }),
-        `Moved ${selectedNpc?.label ?? selectedNpcId}.`
-      );
+      const oldNpc = selectedNpc;
+      const nextMap = updateNpcDefinition(map, selectedNpcId, { position: snappedPosition });
+      const updatedNpc = nextMap.npcs.find((n) => n.id === selectedNpcId);
+      if (oldNpc && updatedNpc) {
+        setHistory((prev) =>
+          pushTransaction(prev, {
+            type: "npc_mutate",
+            oldNpc,
+            newNpc: updatedNpc,
+            description: `Move ${oldNpc.label}`,
+          })
+        );
+      }
+      applyMapUpdate(nextMap, `Moved ${selectedNpc?.label ?? selectedNpcId}.`);
       return;
     }
 
@@ -260,16 +383,45 @@ export function MapEditorShell() {
     if (!map || !selectedChunk) {
       return;
     }
+    const before = map;
     const next = addChunk(map, selectedChunk.x + dx, selectedChunk.z + dz);
+    const added = next.chunks.find(
+      (chunk) => chunk.x === selectedChunk.x + dx && chunk.z === selectedChunk.z + dz
+    );
+    if (added) {
+      setHistory((prev) =>
+        pushTransaction(prev, {
+          type: "add_chunk",
+          chunk: added,
+          previousBounds: before.bounds,
+          newBounds: next.bounds,
+          description: `Add chunk ${added.id}`,
+        })
+      );
+    }
     setSelectedChunkId(`${selectedChunk.x + dx}:${selectedChunk.z + dz}`);
     applyMapUpdate(next, "Added adjacent chunk.");
   };
 
   const handleChunkRemoval = () => {
-    if (!map || !selectedChunkId) {
+    if (!map || !selectedChunkId || map.chunks.length <= 1) {
       return;
     }
+    const chunkToRemove = map.chunks.find((chunk) => chunk.id === selectedChunkId);
+    if (!chunkToRemove) {
+      return;
+    }
+    const before = map;
     const next = removeChunk(map, selectedChunkId);
+    setHistory((prev) =>
+      pushTransaction(prev, {
+        type: "remove_chunk",
+        chunk: chunkToRemove,
+        previousBounds: before.bounds,
+        newBounds: next.bounds,
+        description: `Remove chunk ${selectedChunkId}`,
+      })
+    );
     setSelectedChunkId(next.chunks[0]?.id ?? null);
     applyMapUpdate(next, `Removed chunk ${selectedChunkId}.`);
   };
@@ -293,6 +445,13 @@ export function MapEditorShell() {
     const created = createNpcDefinition(map, { position });
     setSelectedNpcId(created.npc.id);
     setMode("npc");
+    setHistory((prev) =>
+      pushTransaction(prev, {
+        type: "npc_mutate",
+        newNpc: created.npc,
+        description: `Create ${created.npc.label}`,
+      })
+    );
     applyMapUpdate(created.map, `Created ${created.npc.label}.`);
   };
 
@@ -359,6 +518,28 @@ export function MapEditorShell() {
                 Publish
               </button>
             </div>
+          </div>
+          <div className="history-toolbar-row">
+            <button
+              className="history-button"
+              data-testid="undo-button"
+              disabled={!canUndo(history)}
+              onClick={handleUndo}
+              title="Undo (⌘Z / Ctrl+Z)"
+            >
+              <span>↶</span> Undo{" "}
+              {history.undoStack.length > 0 ? `(${history.undoStack.length})` : ""}
+            </button>
+            <button
+              className="history-button"
+              data-testid="redo-button"
+              disabled={!canRedo(history)}
+              onClick={handleRedo}
+              title="Redo (⇧⌘Z / Ctrl+Y)"
+            >
+              <span>↷</span> Redo{" "}
+              {history.redoStack.length > 0 ? `(${history.redoStack.length})` : ""}
+            </button>
           </div>
           <p className="toolbar-status">{status}</p>
           {!controlsCollapsed ? (
@@ -571,10 +752,18 @@ export function MapEditorShell() {
                     <button
                       className="danger-button"
                       onClick={() => {
-                        applyMapUpdate(
-                          deleteNpcDefinition(map, selectedNpc.id),
-                          `Deleted ${selectedNpc.label}.`
-                        );
+                        const oldNpc = selectedNpc;
+                        const nextMap = deleteNpcDefinition(map, selectedNpc.id);
+                        if (oldNpc) {
+                          setHistory((prev) =>
+                            pushTransaction(prev, {
+                              type: "npc_mutate",
+                              oldNpc,
+                              description: `Delete ${oldNpc.label}`,
+                            })
+                          );
+                        }
+                        applyMapUpdate(nextMap, `Deleted ${selectedNpc.label}.`);
                         setSelectedNpcId(
                           map.npcs.find((npc) => npc.id !== selectedNpc.id)?.id ?? null
                         );
@@ -596,6 +785,8 @@ export function MapEditorShell() {
                   <span>`WASD` pan</span>
                   <span>`Space` pan</span>
                   <span>`Alt` invert</span>
+                  <span>`⌘Z` undo</span>
+                  <span>`⇧⌘Z` redo</span>
                 </div>
               </div>
             </div>
@@ -633,6 +824,8 @@ export function MapEditorShell() {
             setStatus(`Selected NPC ${npcId}.`);
           }}
           onCameraHeadingChange={setCameraHeading}
+          onStrokeStart={handleStrokeStart}
+          onStrokeEnd={handleStrokeEnd}
         />
 
         <div className="legend legend-overlay">

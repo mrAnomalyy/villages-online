@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CharacterBodyType,
+  CharacterProfile,
   CharacterSummary,
   GuestAuthResponse,
   InitialWorldPayload,
@@ -13,9 +14,11 @@ import { CHUNK_SIZE, type EntitySnapshot } from "@villages/shared";
 import {
   createCharacter,
   fetchCharacter,
+  fetchMyCharacters,
   fetchRealms,
   guestAuth,
   requestJoinTicket,
+  saveCharacterCustomization,
 } from "../lib/api";
 import { BabylonGameCanvas } from "./scene-canvas";
 
@@ -25,6 +28,21 @@ type Direction = { x: number; z: number };
 type SessionState = GuestAuthResponse & {
   realm: RealmDescriptor;
 };
+
+export const SKIN_TONES = [
+  { id: "fair", label: "Fair", hex: "#f5d0a9" },
+  { id: "warm", label: "Warm", hex: "#d4a373" },
+  { id: "olive", label: "Olive", hex: "#a37c52" },
+  { id: "deep", label: "Deep", hex: "#5c3a21" },
+];
+
+export const ARMOR_TINTS = [
+  { id: "steel", label: "Steel", hex: "#718096" },
+  { id: "crimson", label: "Crimson", hex: "#9b2c2c" },
+  { id: "forest", label: "Forest", hex: "#276749" },
+  { id: "gold", label: "Gold", hex: "#d69e2e" },
+  { id: "obsidian", label: "Obsidian", hex: "#2d3748" },
+];
 
 type DebugState = {
   currentRealmId: string | null;
@@ -60,6 +78,11 @@ export function GameShell() {
   const [selectedRealmId, setSelectedRealmId] = useState("alpha");
   const [selectedBodyType, setSelectedBodyType] = useState<CharacterBodyType>("male");
   const [token, setToken] = useState("");
+  const [savedCharacters, setSavedCharacters] = useState<CharacterProfile[]>([]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
+  const [customName, setCustomName] = useState("");
+  const [selectedSkinTone, setSelectedSkinTone] = useState(SKIN_TONES[0].hex);
+  const [selectedArmorTint, setSelectedArmorTint] = useState(ARMOR_TINTS[0].hex);
   const [stage, setStage] = useState<Stage>("menu");
   const [session, setSession] = useState<SessionState | null>(null);
   const [character, setCharacter] = useState<CharacterSummary | null>(null);
@@ -161,17 +184,26 @@ export function GameShell() {
       ...auth,
       realm: selectedRealm,
     });
+    setCustomName(auth.nickname);
+
+    let myChars: CharacterProfile[] = [];
+    try {
+      myChars = await fetchMyCharacters(auth.token);
+      setSavedCharacters(myChars);
+    } catch {
+      // If none or error, keep empty
+    }
 
     const existingCharacter = await fetchCharacter(selectedRealm.id, auth.playerId, auth.token);
     if (existingCharacter) {
       setCharacter(existingCharacter);
-      await beginJoin(selectedRealm, auth);
-      return;
+      setSelectedBodyType(existingCharacter.bodyType);
+    } else {
+      setCharacter(null);
     }
 
-    setCharacter(null);
     setStage("character");
-    setStatus("Shape your first hero.");
+    setStatus(myChars.length > 0 ? "Select or customize your hero." : "Shape your first hero.");
   }
 
   async function beginJoin(realm: RealmDescriptor, auth: GuestAuthResponse) {
@@ -272,6 +304,24 @@ export function GameShell() {
     try {
       setError(null);
       setStatus("Forging your character...");
+      const heroName = customName.trim() || session.nickname;
+
+      // 1. Persist customizations to /api/characters
+      try {
+        await saveCharacterCustomization(session.token, {
+          id: selectedCharacterId ?? undefined,
+          name: heroName,
+          appearance: {
+            bodyType: selectedBodyType,
+            skinTone: selectedSkinTone,
+            armorTint: selectedArmorTint,
+          },
+        });
+      } catch {
+        // Continue even if customization store fails
+      }
+
+      // 2. Link to realm character session
       const created = await createCharacter(
         session.realm.id,
         session.playerId,
@@ -279,10 +329,59 @@ export function GameShell() {
         selectedBodyType
       );
       setCharacter(created);
+
+      // 3. Enter realm
       await beginJoin(session.realm, session);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Character creation failed.");
     }
+  }
+
+  async function handleSelectSavedCharacter(hero: CharacterProfile) {
+    if (!session) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setStatus(`Summoning ${hero.name}...`);
+      const bType = (hero.appearance?.bodyType as CharacterBodyType) ?? "male";
+      setSelectedBodyType(bType);
+      setSelectedCharacterId(hero.id);
+      setCustomName(hero.name);
+      if (typeof hero.appearance?.skinTone === "string") {
+        setSelectedSkinTone(hero.appearance.skinTone);
+      }
+      if (typeof hero.appearance?.armorTint === "string") {
+        setSelectedArmorTint(hero.appearance.armorTint);
+      }
+
+      const created = await createCharacter(
+        session.realm.id,
+        session.playerId,
+        session.token,
+        bType
+      );
+      setCharacter(created);
+      await beginJoin(session.realm, session);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Failed to enter realm with saved hero.");
+    }
+  }
+
+  function handleEditSavedCharacter(hero: CharacterProfile) {
+    setSelectedCharacterId(hero.id);
+    setCustomName(hero.name);
+    if (hero.appearance?.bodyType === "male" || hero.appearance?.bodyType === "female") {
+      setSelectedBodyType(hero.appearance.bodyType);
+    }
+    if (typeof hero.appearance?.skinTone === "string") {
+      setSelectedSkinTone(hero.appearance.skinTone);
+    }
+    if (typeof hero.appearance?.armorTint === "string") {
+      setSelectedArmorTint(hero.appearance.armorTint);
+    }
+    setStatus(`Editing customizations for ${hero.name}.`);
   }
 
   function handleMove(direction: Direction) {
@@ -402,40 +501,165 @@ export function GameShell() {
             ) : (
               <>
                 <div className="status-box" data-testid="character-create-screen">
-                  <strong>Create your hero for {session?.realm.name}</strong>
+                  <strong>Create or choose your hero for {session?.realm.name}</strong>
                   <p>
-                    Nickname: <strong>{session?.nickname}</strong>
+                    Account: <strong>{session?.nickname}</strong>
                   </p>
                 </div>
+
+                {savedCharacters.length > 0 ? (
+                  <div>
+                    <h3 className="section-heading">Your Saved Heroes</h3>
+                    <div className="saved-heroes-grid" data-testid="saved-heroes-list">
+                      {savedCharacters.map((hero) => (
+                        <div
+                          key={hero.id}
+                          className="saved-hero-card"
+                          data-testid={`hero-card-${hero.id}`}
+                        >
+                          <div className="saved-hero-header">
+                            <strong>{hero.name}</strong>
+                            <span className="saved-hero-badge">
+                              {hero.appearance?.bodyType === "female"
+                                ? "Female Ranger"
+                                : "Male Wanderer"}
+                            </span>
+                          </div>
+                          <div className="saved-hero-meta">
+                            <small>Created: {new Date(hero.created_at).toLocaleDateString()}</small>
+                            <div className="swatch-indicators">
+                              <span
+                                className="swatch-indicator"
+                                style={{
+                                  backgroundColor:
+                                    (hero.appearance?.skinTone as string) ?? SKIN_TONES[0].hex,
+                                }}
+                                title="Skin tone"
+                              />
+                              <span
+                                className="swatch-indicator"
+                                style={{
+                                  backgroundColor:
+                                    (hero.appearance?.armorTint as string) ?? ARMOR_TINTS[0].hex,
+                                }}
+                                title="Armor tint"
+                              />
+                            </div>
+                          </div>
+                          <div className="saved-hero-actions">
+                            <button
+                              type="button"
+                              className="quick-enter-button"
+                              data-testid={`select-hero-${hero.id}`}
+                              onClick={() => void handleSelectSavedCharacter(hero)}
+                            >
+                              Enter Realm
+                            </button>
+                            <button
+                              type="button"
+                              className="edit-hero-button"
+                              data-testid={`edit-hero-${hero.id}`}
+                              onClick={() => handleEditSavedCharacter(hero)}
+                            >
+                              Customize
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="customization-box" data-testid="hero-customizer">
+                  <h3 className="section-heading">
+                    {selectedCharacterId ? "Customize Selected Hero" : "Hero Customization"}
+                  </h3>
+
+                  <div className="field">
+                    <label htmlFor="hero-name">Hero Name</label>
+                    <input
+                      id="hero-name"
+                      data-testid="hero-name-input"
+                      value={customName}
+                      onChange={(event) => setCustomName(event.target.value)}
+                      placeholder="Confirm or customize nickname"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Avatar Archetype</label>
+                    <div className="character-grid">
+                      {SELECTABLE_BODY_TYPES.map((bodyType) => (
+                        <button
+                          key={bodyType}
+                          type="button"
+                          className="character-card"
+                          data-selected={selectedBodyType === bodyType}
+                          data-testid={`body-${bodyType}`}
+                          onClick={() => setSelectedBodyType(bodyType)}
+                        >
+                          <strong>{bodyType === "male" ? "Male wanderer" : "Female ranger"}</strong>
+                          <p>Primitive avatar now, full model pipeline later.</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="swatch-group">
+                    <label>Skin Tone</label>
+                    <div className="swatch-palette" data-testid="skin-tone-palette">
+                      {SKIN_TONES.map((swatch) => (
+                        <button
+                          key={swatch.id}
+                          type="button"
+                          className="swatch-button"
+                          data-selected={selectedSkinTone === swatch.hex}
+                          data-testid={`skin-tone-${swatch.id}`}
+                          onClick={() => setSelectedSkinTone(swatch.hex)}
+                        >
+                          <span className="color-dot" style={{ backgroundColor: swatch.hex }} />
+                          <span>{swatch.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="swatch-group">
+                    <label>Armor Tint</label>
+                    <div className="swatch-palette" data-testid="armor-tint-palette">
+                      {ARMOR_TINTS.map((swatch) => (
+                        <button
+                          key={swatch.id}
+                          type="button"
+                          className="swatch-button"
+                          data-selected={selectedArmorTint === swatch.hex}
+                          data-testid={`armor-tint-${swatch.id}`}
+                          onClick={() => setSelectedArmorTint(swatch.hex)}
+                        >
+                          <span className="color-dot" style={{ backgroundColor: swatch.hex }} />
+                          <span>{swatch.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 {issuedToken ? (
                   <div className="token-box" data-testid="issued-token-box">
                     <strong>Your browser token</strong>
                     <div>{issuedToken}</div>
                   </div>
                 ) : null}
-                <div className="character-grid">
-                  {SELECTABLE_BODY_TYPES.map((bodyType) => (
-                    <button
-                      key={bodyType}
-                      type="button"
-                      className="character-card"
-                      data-selected={selectedBodyType === bodyType}
-                      data-testid={`body-${bodyType}`}
-                      onClick={() => setSelectedBodyType(bodyType)}
-                    >
-                      <strong>{bodyType === "male" ? "Male wanderer" : "Female ranger"}</strong>
-                      <p>Primitive avatar now, full model pipeline later.</p>
-                    </button>
-                  ))}
-                </div>
+
                 {error ? <div className="error-box">{error}</div> : null}
+
                 <div className="actions">
                   <button
                     className="primary-button"
                     data-testid="create-character-button"
                     onClick={handleCreateCharacter}
                   >
-                    Create and enter realm
+                    {selectedCharacterId ? "Save & Enter Realm" : "Create and enter realm"}
                   </button>
                   <button className="secondary-button" onClick={() => setStage("menu")}>
                     Back

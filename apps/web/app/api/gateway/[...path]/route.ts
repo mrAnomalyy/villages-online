@@ -13,6 +13,7 @@ async function handleProxy(request: NextRequest, params: { path: string[] }) {
     method: request.method,
     headers: {
       "Content-Type": request.headers.get("content-type") ?? "application/json",
+      Authorization: request.headers.get("authorization") ?? "",
       "x-player-id": request.headers.get("x-player-id") ?? "",
       "x-player-token": request.headers.get("x-player-token") ?? "",
     },

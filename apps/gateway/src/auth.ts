@@ -2,11 +2,11 @@ import crypto from "node:crypto";
 import type { Pool } from "pg";
 import { sanitizeNickname } from "@villages/shared";
 
-function hashToken(token: string): string {
+export function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function generateToken(): string {
+export function generateToken(): string {
   return crypto.randomBytes(24).toString("hex");
 }
 

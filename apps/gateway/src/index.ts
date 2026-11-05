@@ -10,8 +10,10 @@ import type {
   RealmJoinTicket,
 } from "@villages/shared";
 import { pool, ensureRealmRows } from "./db";
-import { registerOrResumeGuest, makeTicket } from "./auth";
+import { registerOrResumeGuest, makeTicket, hashToken } from "./auth";
 import { getRealmById, realms } from "./realms";
+import { createMapsRouter } from "./maps";
+import { createCharactersRouter } from "./characters";
 
 const port = Number(process.env.PORT ?? 4000);
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
@@ -24,6 +26,26 @@ const redis = new Redis(redisUrl, {
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// JSON syntax error handler to return JSON error responses instead of HTML
+app.use(
+  (err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (
+      err instanceof SyntaxError ||
+      (typeof err === "object" &&
+        err !== null &&
+        "status" in err &&
+        (err as { status: unknown }).status === 400)
+    ) {
+      res.status(400).json({ error: "Malformed or invalid JSON payload." });
+      return;
+    }
+    next(err);
+  }
+);
+
+app.use("/api/maps", createMapsRouter(pool));
+app.use("/api/characters", createCharactersRouter(pool));
 
 const authSchema = z.object({
   nickname: z.string().min(3),
@@ -109,11 +131,12 @@ app.get("/realms/:realmId/character", async (req, res) => {
     return;
   }
 
+  const tokenHash = hashToken(auth.token);
   const result = await pool.query(
-    `SELECT id, player_id, realm_id, nickname_snapshot, body_type, position_x, position_y, position_z
+    `SELECT id, player_id, realm_id, nickname_snapshot, body_type, position_x, position_y, position_z, velocity_y, name, appearance, last_position
      FROM characters
-     WHERE player_id = $1 AND realm_id = $2`,
-    [auth.playerId, realmId]
+     WHERE account_token_hash = $1 OR player_id = $2`,
+    [tokenHash, auth.playerId]
   );
 
   if (result.rowCount === 0) {
@@ -121,16 +144,43 @@ app.get("/realms/:realmId/character", async (req, res) => {
     return;
   }
 
+  const row = result.rows[0];
+  const appearance =
+    typeof row.appearance === "string" ? JSON.parse(row.appearance) : (row.appearance ?? {});
+  const lastPosition =
+    typeof row.last_position === "string"
+      ? JSON.parse(row.last_position)
+      : (row.last_position ?? null);
+
+  const posX =
+    row.position_x !== null && row.position_x !== undefined
+      ? Number(row.position_x)
+      : lastPosition?.x !== null && lastPosition?.x !== undefined
+        ? Number(lastPosition.x)
+        : 8;
+  const posY =
+    row.position_y !== null && row.position_y !== undefined
+      ? Number(row.position_y)
+      : lastPosition?.y !== null && lastPosition?.y !== undefined
+        ? Number(lastPosition.y)
+        : 1;
+  const posZ =
+    row.position_z !== null && row.position_z !== undefined
+      ? Number(row.position_z)
+      : lastPosition?.z !== null && lastPosition?.z !== undefined
+        ? Number(lastPosition.z)
+        : 8;
+
   res.json({
-    id: result.rows[0].id,
-    playerId: result.rows[0].player_id,
-    realmId: result.rows[0].realm_id,
-    nickname: result.rows[0].nickname_snapshot,
-    bodyType: result.rows[0].body_type,
+    id: row.id,
+    playerId: auth.playerId,
+    realmId: row.realm_id ?? realmId,
+    nickname: row.name ?? row.nickname_snapshot,
+    bodyType: appearance.bodyType ?? row.body_type ?? "male",
     position: {
-      x: Number(result.rows[0].position_x),
-      y: Number(result.rows[0].position_y),
-      z: Number(result.rows[0].position_z),
+      x: posX,
+      y: posY,
+      z: posZ,
     },
   });
   return;
@@ -164,26 +214,118 @@ app.post("/realms/:realmId/characters", async (req, res) => {
     return;
   }
 
-  const created = await pool.query(
-    `INSERT INTO characters (
-       id, player_id, realm_id, nickname_snapshot, body_type, position_x, position_y, position_z
-     ) VALUES ($1, $2, $3, $4, $5, 8, 1, 8)
-     ON CONFLICT (player_id, realm_id) DO UPDATE
-     SET body_type = EXCLUDED.body_type
-     RETURNING id, player_id, realm_id, nickname_snapshot, body_type, position_x, position_y, position_z`,
-    [crypto.randomUUID(), auth.playerId, realmId, player.rows[0].nickname, parsed.data.bodyType]
+  const tokenHash = hashToken(auth.token);
+  const existing = await pool.query<{
+    id: string;
+    position_x: number | null;
+    position_y: number | null;
+    position_z: number | null;
+    last_position: unknown;
+    appearance: unknown;
+  }>(
+    `SELECT id, position_x, position_y, position_z, last_position, appearance
+     FROM characters
+     WHERE account_token_hash = $1 OR player_id = $2`,
+    [tokenHash, auth.playerId]
   );
 
+  let characterId = existing.rows[0]?.id;
+  let posX = 8;
+  let posY = 1;
+  let posZ = 8;
+
+  if (!characterId) {
+    characterId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO characters (
+         id, player_id, realm_id, nickname_snapshot, body_type,
+         position_x, position_y, position_z, velocity_y,
+         account_token_hash, name, appearance, last_position,
+         created_at, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [
+        characterId,
+        auth.playerId,
+        realmId,
+        player.rows[0].nickname,
+        parsed.data.bodyType,
+        8,
+        1,
+        8,
+        0,
+        tokenHash,
+        player.rows[0].nickname,
+        JSON.stringify({ bodyType: parsed.data.bodyType }),
+        JSON.stringify({ x: 8, y: 1, z: 8 }),
+      ]
+    );
+  } else {
+    const existingRow = existing.rows[0];
+    const existingLastPos =
+      typeof existingRow.last_position === "string"
+        ? JSON.parse(existingRow.last_position)
+        : existingRow.last_position;
+
+    posX =
+      existingRow.position_x !== null && existingRow.position_x !== undefined
+        ? Number(existingRow.position_x)
+        : existingLastPos?.x !== null && existingLastPos?.x !== undefined
+          ? Number(existingLastPos.x)
+          : 8;
+    posY =
+      existingRow.position_y !== null && existingRow.position_y !== undefined
+        ? Number(existingRow.position_y)
+        : existingLastPos?.y !== null && existingLastPos?.y !== undefined
+          ? Number(existingLastPos.y)
+          : 1;
+    posZ =
+      existingRow.position_z !== null && existingRow.position_z !== undefined
+        ? Number(existingRow.position_z)
+        : existingLastPos?.z !== null && existingLastPos?.z !== undefined
+          ? Number(existingLastPos.z)
+          : 8;
+
+    const existingAppearance =
+      typeof existingRow.appearance === "string"
+        ? JSON.parse(existingRow.appearance)
+        : (existingRow.appearance ?? {});
+
+    const mergedAppearance = {
+      ...existingAppearance,
+      bodyType: parsed.data.bodyType,
+    };
+
+    await pool.query(
+      `UPDATE characters
+       SET player_id = COALESCE(player_id, $1),
+           realm_id = $2,
+           nickname_snapshot = $3,
+           body_type = $4,
+           name = $3,
+           appearance = $5,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6`,
+      [
+        auth.playerId,
+        realmId,
+        player.rows[0].nickname,
+        parsed.data.bodyType,
+        JSON.stringify(mergedAppearance),
+        characterId,
+      ]
+    );
+  }
+
   res.status(201).json({
-    id: created.rows[0].id,
-    playerId: created.rows[0].player_id,
-    realmId: created.rows[0].realm_id,
-    nickname: created.rows[0].nickname_snapshot,
-    bodyType: created.rows[0].body_type,
+    id: characterId,
+    playerId: auth.playerId,
+    realmId,
+    nickname: player.rows[0].nickname,
+    bodyType: parsed.data.bodyType,
     position: {
-      x: Number(created.rows[0].position_x),
-      y: Number(created.rows[0].position_y),
-      z: Number(created.rows[0].position_z),
+      x: posX,
+      y: posY,
+      z: posZ,
     },
   });
   return;
@@ -208,14 +350,20 @@ app.post("/realms/:realmId/join", async (req, res) => {
     return;
   }
 
+  const tokenHash = hashToken(auth.token);
   const character = await pool.query<{ id: string }>(
-    "SELECT id FROM characters WHERE player_id = $1 AND realm_id = $2",
-    [auth.playerId, realmId]
+    "SELECT id FROM characters WHERE account_token_hash = $1 OR player_id = $2",
+    [tokenHash, auth.playerId]
   );
   if (character.rowCount === 0) {
     res.status(400).json({ message: "Character not created yet." });
     return;
   }
+
+  await pool.query(
+    "UPDATE characters SET realm_id = $1, player_id = COALESCE(player_id, $2) WHERE id = $3",
+    [realmId, auth.playerId, character.rows[0].id]
+  );
 
   const ticket = makeTicket();
   await redis.set(
@@ -239,14 +387,18 @@ app.post("/realms/:realmId/join", async (req, res) => {
   return;
 });
 
-async function start(): Promise<void> {
+export async function start(): Promise<void> {
   await ensureRealmRows(realms);
   app.listen(port, () => {
     console.log(`[gateway] listening on ${port}`);
   });
 }
 
-start().catch((error) => {
-  console.error("[gateway] failed to boot", error);
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+  start().catch((error) => {
+    console.error("[gateway] failed to boot", error);
+    process.exit(1);
+  });
+}
+
+export { app };

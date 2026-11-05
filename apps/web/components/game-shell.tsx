@@ -326,7 +326,8 @@ export function GameShell() {
         session.realm.id,
         session.playerId,
         session.token,
-        selectedBodyType
+        selectedBodyType,
+        selectedCharacterId ?? undefined
       );
       setCharacter(created);
 
@@ -360,7 +361,8 @@ export function GameShell() {
         session.realm.id,
         session.playerId,
         session.token,
-        bType
+        bType,
+        hero.id
       );
       setCharacter(created);
       await beginJoin(session.realm, session);

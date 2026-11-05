@@ -54,6 +54,7 @@ const authSchema = z.object({
 
 const createCharacterSchema = z.object({
   bodyType: z.enum(["male", "female"]),
+  characterId: z.string().optional(),
 });
 
 function getAuthHeaders(req: express.Request): { playerId: string; token: string } | null {
@@ -215,19 +216,35 @@ app.post("/realms/:realmId/characters", async (req, res) => {
   }
 
   const tokenHash = hashToken(auth.token);
-  const existing = await pool.query<{
-    id: string;
-    position_x: number | null;
-    position_y: number | null;
-    position_z: number | null;
-    last_position: unknown;
-    appearance: unknown;
-  }>(
-    `SELECT id, position_x, position_y, position_z, last_position, appearance
-     FROM characters
-     WHERE account_token_hash = $1 OR player_id = $2`,
-    [tokenHash, auth.playerId]
-  );
+  const targetId = parsed.data.characterId;
+  const existing = targetId
+    ? await pool.query<{
+        id: string;
+        position_x: number | null;
+        position_y: number | null;
+        position_z: number | null;
+        last_position: unknown;
+        appearance: unknown;
+      }>(
+        `SELECT id, position_x, position_y, position_z, last_position, appearance
+         FROM characters
+         WHERE id = $1 AND (account_token_hash = $2 OR player_id = $3)`,
+        [targetId, tokenHash, auth.playerId]
+      )
+    : await pool.query<{
+        id: string;
+        position_x: number | null;
+        position_y: number | null;
+        position_z: number | null;
+        last_position: unknown;
+        appearance: unknown;
+      }>(
+        `SELECT id, position_x, position_y, position_z, last_position, appearance
+         FROM characters
+         WHERE account_token_hash = $1 OR player_id = $2
+         ORDER BY updated_at DESC LIMIT 1`,
+        [tokenHash, auth.playerId]
+      );
 
   let characterId = existing.rows[0]?.id;
   let posX = 8;

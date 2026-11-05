@@ -46,6 +46,7 @@ export type CharacterSummary = {
 
 export type CreateCharacterRequest = {
   bodyType: CharacterBodyType;
+  characterId?: string;
 };
 
 export type RealmJoinTicket = {

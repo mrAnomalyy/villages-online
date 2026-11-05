@@ -67,7 +67,8 @@ export async function createCharacter(
   realmId: string,
   playerId: string,
   token: string,
-  bodyType: CharacterBodyType
+  bodyType: CharacterBodyType,
+  characterId?: string
 ): Promise<CharacterSummary> {
   const response = await fetch(`${gatewayUrl}/realms/${realmId}/characters`, {
     method: "POST",
@@ -76,7 +77,7 @@ export async function createCharacter(
       "x-player-id": playerId,
       "x-player-token": token,
     },
-    body: JSON.stringify({ bodyType }),
+    body: JSON.stringify({ bodyType, characterId }),
   });
 
   if (!response.ok) {

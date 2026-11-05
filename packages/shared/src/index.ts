@@ -46,6 +46,22 @@ export type Vector3Like = {
 
 export type WaterMask = boolean[][];
 
+export type SurfaceMaterialId = 0 | 1 | 2 | 3 | 4;
+
+export const SURFACE_MATERIAL_GRASS: SurfaceMaterialId = 0;
+export const SURFACE_MATERIAL_DIRT: SurfaceMaterialId = 1;
+export const SURFACE_MATERIAL_COBBLESTONE: SurfaceMaterialId = 2;
+export const SURFACE_MATERIAL_SAND: SurfaceMaterialId = 3;
+export const SURFACE_MATERIAL_ROCK: SurfaceMaterialId = 4;
+
+export const SURFACE_MATERIALS = [
+  { id: 0 as SurfaceMaterialId, name: "Grass", color: "#648c54" },
+  { id: 1 as SurfaceMaterialId, name: "Dirt", color: "#8c6640" },
+  { id: 2 as SurfaceMaterialId, name: "Cobblestone", color: "#808085" },
+  { id: 3 as SurfaceMaterialId, name: "Sand", color: "#d1bd85" },
+  { id: 4 as SurfaceMaterialId, name: "Rock", color: "#52575c" },
+] as const;
+
 export type TerrainChunkDTO = {
   id: string;
   x: number;
@@ -54,6 +70,7 @@ export type TerrainChunkDTO = {
   resolution: number;
   heights: number[][];
   water: WaterMask;
+  surface?: number[][];
 };
 
 export type StandingNpcBehavior = {

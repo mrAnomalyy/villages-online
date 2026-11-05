@@ -4,7 +4,13 @@ import { useEffect, useRef } from "react";
 import type { MapAsset } from "@villages/shared";
 import type * as BabylonCore from "@babylonjs/core";
 import type { Engine, Mesh, Scene, StandardMaterial } from "@babylonjs/core";
-import { buildTerrainScene, getChunkAt, getChunkResolution, getHeightAt } from "@villages/world";
+import {
+  buildTerrainScene,
+  getChunkAt,
+  getChunkResolution,
+  getHeightAt,
+  SURFACE_MATERIAL_COLORS,
+} from "@villages/world";
 
 type TerrainPick = {
   chunkId: string;
@@ -19,8 +25,9 @@ type TerrainPick = {
 
 type Props = {
   map: MapAsset;
-  mode: "chunk" | "terrain" | "water" | "npc";
+  mode: "chunk" | "terrain" | "water" | "surface" | "npc";
   brushRadius: number;
+  surfaceMaterial?: number;
   selectedChunkId: string | null;
   selectedNpcId: string | null;
   spacePressed: boolean;
@@ -55,6 +62,7 @@ export function EditorCanvas({
   map,
   mode,
   brushRadius,
+  surfaceMaterial = 2,
   selectedChunkId,
   selectedNpcId,
   spacePressed,
@@ -68,6 +76,7 @@ export function EditorCanvas({
   const mapRef = useRef(map);
   const modeRef = useRef(mode);
   const brushRadiusRef = useRef(brushRadius);
+  const surfaceMaterialRef = useRef(surfaceMaterial);
   const selectedChunkIdRef = useRef(selectedChunkId);
   const selectedNpcIdRef = useRef(selectedNpcId);
   const spacePressedRef = useRef(spacePressed);
@@ -97,6 +106,7 @@ export function EditorCanvas({
     mapRef.current = map;
     modeRef.current = mode;
     brushRadiusRef.current = brushRadius;
+    surfaceMaterialRef.current = surfaceMaterial;
     selectedChunkIdRef.current = selectedChunkId;
     selectedNpcIdRef.current = selectedNpcId;
     spacePressedRef.current = spacePressed;
@@ -117,6 +127,7 @@ export function EditorCanvas({
     selectedChunkId,
     selectedNpcId,
     spacePressed,
+    surfaceMaterial,
   ]);
 
   useEffect(() => {
@@ -139,7 +150,7 @@ export function EditorCanvas({
     }
 
     syncSelectionState(handles);
-  }, [map, mode, brushRadius, selectedChunkId, selectedNpcId]);
+  }, [map, mode, brushRadius, surfaceMaterial, selectedChunkId, selectedNpcId]);
 
   useEffect(() => {
     let engine: Engine | null = null;
@@ -328,8 +339,12 @@ export function EditorCanvas({
         camera.target.addInPlace(forward.scale(deltaY * scale));
       };
 
-      const handleMouseDown = (event: MouseEvent) => {
+      const handleMouseDown = (event: MouseEvent | PointerEvent) => {
         if (event.button !== 0) {
+          return;
+        }
+
+        if (leftPointerDownRef.current) {
           return;
         }
 
@@ -352,7 +367,11 @@ export function EditorCanvas({
         }
 
         leftPointerDownRef.current = true;
-        if (modeRef.current === "terrain" || modeRef.current === "water") {
+        if (
+          modeRef.current === "terrain" ||
+          modeRef.current === "water" ||
+          modeRef.current === "surface"
+        ) {
           strokeActiveRef.current = true;
           onStrokeStartRef.current?.();
         }
@@ -513,6 +532,9 @@ export function EditorCanvas({
       };
 
       canvasRef.current.addEventListener("wheel", wheel, { passive: false });
+      window.addEventListener("pointerdown", handleMouseDown, true);
+      window.addEventListener("pointermove", handleMouseMove, true);
+      window.addEventListener("pointerup", handleMouseUp, true);
       window.addEventListener("mousedown", handleMouseDown, true);
       window.addEventListener("mousemove", handleMouseMove, true);
       window.addEventListener("mouseup", handleMouseUp, true);
@@ -536,7 +558,9 @@ export function EditorCanvas({
         if (
           leftPointerDownRef.current &&
           !panningRef.current &&
-          (modeRef.current === "terrain" || modeRef.current === "water") &&
+          (modeRef.current === "terrain" ||
+            modeRef.current === "water" ||
+            modeRef.current === "surface") &&
           hoverPickRef.current
         ) {
           const now = performance.now();
@@ -553,6 +577,9 @@ export function EditorCanvas({
 
       return () => {
         canvasRef.current?.removeEventListener("wheel", wheel);
+        window.removeEventListener("pointerdown", handleMouseDown, true);
+        window.removeEventListener("pointermove", handleMouseMove, true);
+        window.removeEventListener("pointerup", handleMouseUp, true);
         window.removeEventListener("mousedown", handleMouseDown, true);
         window.removeEventListener("mousemove", handleMouseMove, true);
         window.removeEventListener("mouseup", handleMouseUp, true);
@@ -711,7 +738,9 @@ export function EditorCanvas({
     const activeMap = mapRef.current;
     const currentMode = modeRef.current;
 
-    const shouldShowPreview = hoverPick && (currentMode === "terrain" || currentMode === "water");
+    const shouldShowPreview =
+      hoverPick &&
+      (currentMode === "terrain" || currentMode === "water" || currentMode === "surface");
     if (!shouldShowPreview || !hoverPick) {
       handles.brushPreview?.dispose();
       handles.brushPreview = null;
@@ -745,9 +774,18 @@ export function EditorCanvas({
     if (currentMode === "terrain") {
       handles.brushPreviewMaterial.diffuseColor = new Color3(0.53, 0.92, 0.94);
       handles.brushPreviewMaterial.emissiveColor = new Color3(0.14, 0.32, 0.35);
-    } else {
+    } else if (currentMode === "water") {
       handles.brushPreviewMaterial.diffuseColor = new Color3(0.25, 0.48, 0.86);
       handles.brushPreviewMaterial.emissiveColor = new Color3(0.08, 0.16, 0.34);
+    } else if (currentMode === "surface") {
+      const activeMat = surfaceMaterialRef.current;
+      const rgb = SURFACE_MATERIAL_COLORS[activeMat] ?? SURFACE_MATERIAL_COLORS[0];
+      handles.brushPreviewMaterial.diffuseColor = new Color3(rgb[0], rgb[1], rgb[2]);
+      handles.brushPreviewMaterial.emissiveColor = new Color3(
+        rgb[0] * 0.3,
+        rgb[1] * 0.3,
+        rgb[2] * 0.3
+      );
     }
   }
 }

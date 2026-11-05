@@ -3,6 +3,7 @@ import {
   addChunk,
   createNpcDefinition,
   deleteNpcDefinition,
+  paintSurface,
   paintWater,
   removeChunk,
   sculptTerrain,
@@ -14,6 +15,7 @@ import {
   canUndo,
   createHistoryState,
   diffMapHeights,
+  diffMapSurface,
   diffMapWater,
   pushTransaction,
   redo,
@@ -120,6 +122,80 @@ describe("sparse delta history system", () => {
     map = redoRes!.map;
     history = redoRes!.state;
     expect(map.chunks[0].water.some((row) => row.some((w) => w))).toBe(true);
+  });
+
+  it("handles surface painting undo and redo", () => {
+    let map = loadPublishedMapAsset();
+    let history = createHistoryState(10);
+
+    // Initial map has no surface or all 0s
+    const beforeStroke1 = map;
+    map = paintSurface(map, { worldX: 20, worldZ: 20, radius: 4, materialId: 2 });
+    const changes1 = diffMapSurface(beforeStroke1, map);
+    expect(changes1.length).toBeGreaterThan(0);
+    expect(changes1[0].cells.every((c) => c.oldValue === 0 && c.newValue === 2)).toBe(true);
+
+    history = pushTransaction(history, {
+      type: "paint_surface",
+      changes: changes1,
+      description: "Paint cobblestone",
+    });
+
+    // Stroke 2: Paint dirt overlapping
+    const beforeStroke2 = map;
+    map = paintSurface(map, { worldX: 20, worldZ: 20, radius: 2, materialId: 1 });
+    const changes2 = diffMapSurface(beforeStroke2, map);
+    expect(changes2.length).toBeGreaterThan(0);
+    expect(changes2[0].cells.every((c) => c.oldValue === 2 && c.newValue === 1)).toBe(true);
+
+    history = pushTransaction(history, {
+      type: "paint_surface",
+      changes: changes2,
+      description: "Paint dirt",
+    });
+
+    expect(history.undoStack).toHaveLength(2);
+
+    // Undo stroke 2 (dirt reverted to cobblestone)
+    const undo1 = undo(map, history);
+    expect(undo1).not.toBeNull();
+    map = undo1!.map;
+    history = undo1!.state;
+    expect(history.undoStack).toHaveLength(1);
+    expect(history.redoStack).toHaveLength(1);
+    // Cells that were dirt should be back to cobblestone (2)
+    for (const cell of changes2[0].cells) {
+      expect(map.chunks[0].surface![cell.row][cell.column]).toBe(2);
+    }
+
+    // Undo stroke 1 (cobblestone reverted to meadow 0)
+    const undo2 = undo(map, history);
+    expect(undo2).not.toBeNull();
+    map = undo2!.map;
+    history = undo2!.state;
+    expect(history.undoStack).toHaveLength(0);
+    expect(history.redoStack).toHaveLength(2);
+    for (const cell of changes1[0].cells) {
+      expect(map.chunks[0].surface![cell.row][cell.column]).toBe(0);
+    }
+
+    // Redo stroke 1
+    const redo1 = redo(map, history);
+    expect(redo1).not.toBeNull();
+    map = redo1!.map;
+    history = redo1!.state;
+    for (const cell of changes1[0].cells) {
+      expect(map.chunks[0].surface![cell.row][cell.column]).toBe(2);
+    }
+
+    // Redo stroke 2
+    const redo2 = redo(map, history);
+    expect(redo2).not.toBeNull();
+    map = redo2!.map;
+    history = redo2!.state;
+    for (const cell of changes2[0].cells) {
+      expect(map.chunks[0].surface![cell.row][cell.column]).toBe(1);
+    }
   });
 
   it("handles chunk addition and removal undo and redo", () => {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { MapAsset, MapNpcDefinition, NpcBehavior } from "@villages/shared";
+import type { MapAsset, MapNpcDefinition, NpcBehavior, SurfaceMaterialId } from "@villages/shared";
+import { SURFACE_MATERIAL_COBBLESTONE, SURFACE_MATERIALS } from "@villages/shared";
 import {
   addChunk,
   appendPatrolPoint,
@@ -11,9 +12,11 @@ import {
   createNpcDefinition,
   deleteNpcDefinition,
   diffMapHeights,
+  diffMapSurface,
   diffMapWater,
   getChunkById,
   getHeightAt,
+  paintSurface,
   paintWater,
   pushTransaction,
   redo,
@@ -26,7 +29,7 @@ import {
 } from "@villages/world";
 import { EditorCanvas } from "./editor-canvas";
 
-type Mode = "chunk" | "terrain" | "water" | "npc";
+type Mode = "chunk" | "terrain" | "water" | "surface" | "npc";
 
 const DEFAULT_MAP_ID = "starter-valley";
 const CARDINAL_DIRECTIONS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
@@ -94,6 +97,12 @@ export function MapEditorShell() {
   const [terrainDelta, setTerrainDelta] = useState<1 | -1>(1);
   const [paintWaterValue, setPaintWaterValue] = useState(true);
   const [npcClickMode, setNpcClickMode] = useState<"move" | "patrol">("move");
+  const [surfaceMaterial, setSurfaceMaterial] = useState<SurfaceMaterialId>(
+    SURFACE_MATERIAL_COBBLESTONE
+  );
+  const [surfaceOpacity, setSurfaceOpacity] = useState(1);
+  const [surfaceHardness, setSurfaceHardness] = useState(1);
+  const [shiftPressed, setShiftPressed] = useState(false);
   const [status, setStatus] = useState("Loading published map...");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -176,6 +185,10 @@ export function MapEditorShell() {
         return;
       }
 
+      if (event.shiftKey || event.key === "Shift") {
+        setShiftPressed(true);
+      }
+
       if (event.altKey || event.code === "AltLeft" || event.code === "AltRight") {
         setAltPressed(true);
       }
@@ -194,6 +207,9 @@ export function MapEditorShell() {
       } else if (key === "e") {
         event.preventDefault();
         setMode("water");
+      } else if (key === "r") {
+        event.preventDefault();
+        setMode("surface");
       } else if (key === "n") {
         event.preventDefault();
         setMode("npc");
@@ -207,11 +223,18 @@ export function MapEditorShell() {
       if (!event.altKey && (event.code === "AltLeft" || event.code === "AltRight")) {
         setAltPressed(false);
       }
+      if (
+        !event.shiftKey &&
+        (event.key === "Shift" || event.code === "ShiftLeft" || event.code === "ShiftRight")
+      ) {
+        setShiftPressed(false);
+      }
     };
 
     const blur = () => {
       setSpacePressed(false);
       setAltPressed(false);
+      setShiftPressed(false);
     };
 
     window.addEventListener("keydown", keydown, true);
@@ -280,6 +303,21 @@ export function MapEditorShell() {
           })
         );
       }
+    } else if (mode === "surface") {
+      const changes = diffMapSurface(before, current);
+      if (changes.length > 0) {
+        const totalCells = changes.reduce((acc, c) => acc + c.cells.length, 0);
+        const materialName =
+          SURFACE_MATERIALS.find((m) => m.id === (shiftPressed ? 0 : surfaceMaterial))?.name ??
+          "Surface";
+        setHistory((prev) =>
+          pushTransaction(prev, {
+            type: "paint_surface",
+            changes,
+            description: `Paint ${materialName} (${totalCells} cells)`,
+          })
+        );
+      }
     }
   };
 
@@ -313,6 +351,22 @@ export function MapEditorShell() {
           value: paintWaterValue,
         }),
         `${paintWaterValue ? "Painted" : "Cleared"} water at ${pick.chunkId}:${pick.column},${pick.row}.`
+      );
+      return;
+    }
+
+    if (mode === "surface") {
+      const targetMaterial = shiftPressed ? 0 : surfaceMaterial;
+      applyMapUpdate(
+        paintSurface(map, {
+          worldX: pick.worldX,
+          worldZ: pick.worldZ,
+          radius: brushRadius,
+          materialId: targetMaterial,
+          opacity: surfaceOpacity,
+          hardness: surfaceHardness,
+        }),
+        `Painted ${SURFACE_MATERIALS.find((m) => m.id === targetMaterial)?.name} at ${pick.chunkId}:${pick.column},${pick.row}.`
       );
       return;
     }
@@ -555,6 +609,7 @@ export function MapEditorShell() {
                       ["chunk", "C"],
                       ["terrain", "Q"],
                       ["water", "E"],
+                      ["surface", "R"],
                       ["npc", "N"],
                     ] as const
                   ).map(([nextMode, key]) => (
@@ -562,6 +617,7 @@ export function MapEditorShell() {
                       key={nextMode}
                       className="mode-button"
                       data-active={mode === nextMode}
+                      data-testid={`mode-${nextMode}`}
                       onClick={() => setMode(nextMode)}
                     >
                       <span>{nextMode}</span>
@@ -570,6 +626,71 @@ export function MapEditorShell() {
                   ))}
                 </div>
               </div>
+
+              {mode === "surface" ? (
+                <div className="compact-panel" data-testid="surface-panel">
+                  <div className="panel-row">
+                    <strong>Surface Materials</strong>
+                    <span className="meta">
+                      {shiftPressed
+                        ? "Meadow (Shift)"
+                        : (SURFACE_MATERIALS.find((m) => m.id === surfaceMaterial)?.name ??
+                          "Surface")}
+                    </span>
+                  </div>
+                  <div className="surface-palette-grid">
+                    {SURFACE_MATERIALS.map((mat) => (
+                      <button
+                        key={mat.id}
+                        className="palette-button"
+                        data-active={!shiftPressed && surfaceMaterial === mat.id}
+                        data-testid={`surface-material-${mat.name.toLowerCase()}`}
+                        onClick={() => setSurfaceMaterial(mat.id)}
+                      >
+                        <span className="material-swatch" style={{ backgroundColor: mat.color }} />
+                        <span>{mat.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <label>
+                    Brush Radius ({brushRadius})
+                    <input
+                      type="range"
+                      min="0"
+                      max="6"
+                      value={brushRadius}
+                      onChange={(event) => setBrushRadius(Number(event.target.value))}
+                    />
+                  </label>
+                  <label>
+                    Opacity ({Math.round(surfaceOpacity * 100)}%)
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.0"
+                      step="0.05"
+                      value={surfaceOpacity}
+                      onChange={(event) => setSurfaceOpacity(Number(event.target.value))}
+                    />
+                  </label>
+                  <label>
+                    Hardness ({Math.round(surfaceHardness * 100)}%)
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.0"
+                      step="0.05"
+                      value={surfaceHardness}
+                      onChange={(event) => setSurfaceHardness(Number(event.target.value))}
+                    />
+                  </label>
+                  <p className="meta">
+                    {shiftPressed
+                      ? "Shift held: Erasing to meadow."
+                      : "Hold `Shift` or select Grass to erase to meadow."}
+                  </p>
+                </div>
+              ) : null}
 
               <div className="compact-panel">
                 <div className="panel-row">
@@ -780,11 +901,13 @@ export function MapEditorShell() {
                 <div className="hotkey-grid">
                   <span>`Q` terrain</span>
                   <span>`E` water</span>
+                  <span>`R` surface</span>
                   <span>`C` chunks</span>
                   <span>`N` NPC</span>
                   <span>`WASD` pan</span>
                   <span>`Space` pan</span>
                   <span>`Alt` invert</span>
+                  <span>`Shift` erase</span>
                   <span>`⌘Z` undo</span>
                   <span>`⇧⌘Z` redo</span>
                 </div>
@@ -814,6 +937,7 @@ export function MapEditorShell() {
           map={map}
           mode={mode}
           brushRadius={brushRadius}
+          surfaceMaterial={shiftPressed ? 0 : surfaceMaterial}
           selectedChunkId={selectedChunkId}
           selectedNpcId={selectedNpcId}
           spacePressed={spacePressed}

@@ -346,9 +346,49 @@ button {
 
 .mode-button[data-active="true"],
 .segmented button[data-active="true"],
-.npc-row[data-active="true"] {
+.npc-row[data-active="true"],
+.palette-button[data-active="true"] {
   outline: 2px solid var(--accent);
   background: rgba(240, 169, 75, 0.16);
+}
+
+.surface-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.palette-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.palette-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.palette-button[data-active="true"] {
+  border-color: rgba(240, 169, 75, 0.45);
+  background: rgba(240, 169, 75, 0.2);
+  color: #ffffff;
+}
+
+.material-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
 }
 
 .meta,

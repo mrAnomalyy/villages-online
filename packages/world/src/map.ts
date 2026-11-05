@@ -34,6 +34,7 @@ export function createEmptyChunk(
       Array.from({ length: resolution }, () => height)
     ),
     water: createWaterMask(resolution),
+    surface: Array.from({ length: resolution }, () => Array.from({ length: resolution }, () => 0)),
   };
 }
 
@@ -145,6 +146,11 @@ function parseChunk(value: unknown, chunkSize: number, defaultResolution: number
     }
   );
 
+  const surface =
+    value.surface !== undefined
+      ? parseMatrix(value.surface, resolution, `chunk ${x}:${z} surface`, asNumber)
+      : undefined;
+
   return {
     id: asString(value.id, "chunk.id"),
     x,
@@ -153,6 +159,7 @@ function parseChunk(value: unknown, chunkSize: number, defaultResolution: number
     resolution,
     heights,
     water,
+    ...(surface ? { surface } : {}),
   };
 }
 
@@ -285,6 +292,7 @@ export function cloneMapAsset(map: MapAsset): MapAsset {
       resolution: chunk.resolution,
       heights: chunk.heights.map((row) => [...row]),
       water: chunk.water.map((row) => [...row]),
+      surface: chunk.surface ? chunk.surface.map((row) => [...row]) : undefined,
     })),
     npcs: map.npcs.map((npc) => ({
       ...npc,

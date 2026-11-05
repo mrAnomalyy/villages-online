@@ -1,5 +1,5 @@
 import type { MapAsset, MapBounds, MapNpcDefinition, TerrainChunkDTO } from "@villages/shared";
-import { cloneMapAsset, computeMapBounds } from "./map";
+import { cloneMapAsset, computeMapBounds, getChunkResolution } from "./map";
 
 export type HeightCellDelta = {
   row: number;
@@ -15,6 +15,13 @@ export type WaterCellDelta = {
   newValue: boolean;
 };
 
+export type SurfaceCellDelta = {
+  row: number;
+  column: number;
+  oldValue: number;
+  newValue: number;
+};
+
 export type EditorTransaction =
   | {
       type: "sculpt_terrain";
@@ -24,6 +31,11 @@ export type EditorTransaction =
   | {
       type: "paint_water";
       changes: Array<{ chunkId: string; cells: WaterCellDelta[] }>;
+      description?: string;
+    }
+  | {
+      type: "paint_surface";
+      changes: Array<{ chunkId: string; cells: SurfaceCellDelta[] }>;
       description?: string;
     }
   | {
@@ -115,6 +127,29 @@ export function applyTransaction(
         for (const cell of change.cells) {
           if (chunk.water[cell.row] && cell.column < chunk.water[cell.row].length) {
             chunk.water[cell.row][cell.column] =
+              direction === "undo" ? cell.oldValue : cell.newValue;
+          }
+        }
+      }
+      next.bounds = computeMapBounds(next.chunks);
+      return next;
+    }
+
+    case "paint_surface": {
+      for (const change of transaction.changes) {
+        const chunk = next.chunks.find((c) => c.id === change.chunkId);
+        if (!chunk) {
+          continue;
+        }
+        if (!chunk.surface) {
+          const resolution = getChunkResolution(chunk);
+          chunk.surface = Array.from({ length: resolution }, () =>
+            Array.from({ length: resolution }, () => 0)
+          );
+        }
+        for (const cell of change.cells) {
+          if (chunk.surface[cell.row] && cell.column < chunk.surface[cell.row].length) {
+            chunk.surface[cell.row][cell.column] =
               direction === "undo" ? cell.oldValue : cell.newValue;
           }
         }
@@ -295,6 +330,43 @@ export function diffMapWater(
             column: col,
             oldValue: beforeRow[col],
             newValue: afterRow[col],
+          });
+        }
+      }
+    }
+
+    if (cells.length > 0) {
+      result.push({ chunkId: beforeChunk.id, cells });
+    }
+  }
+
+  return result;
+}
+
+export function diffMapSurface(
+  before: MapAsset,
+  after: MapAsset
+): Array<{ chunkId: string; cells: SurfaceCellDelta[] }> {
+  const result: Array<{ chunkId: string; cells: SurfaceCellDelta[] }> = [];
+
+  for (const beforeChunk of before.chunks) {
+    const afterChunk = after.chunks.find((c) => c.id === beforeChunk.id);
+    if (!afterChunk) {
+      continue;
+    }
+
+    const resolution = getChunkResolution(beforeChunk);
+    const cells: SurfaceCellDelta[] = [];
+    for (let row = 0; row < resolution; row += 1) {
+      for (let col = 0; col < resolution; col += 1) {
+        const oldValue = beforeChunk.surface?.[row]?.[col] ?? 0;
+        const newValue = afterChunk.surface?.[row]?.[col] ?? 0;
+        if (oldValue !== newValue) {
+          cells.push({
+            row,
+            column: col,
+            oldValue,
+            newValue,
           });
         }
       }

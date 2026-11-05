@@ -4,6 +4,7 @@ import {
   appendPatrolPoint,
   createNpcDefinition,
   deleteNpcDefinition,
+  paintSurface,
   paintWater,
   removeChunk,
   removePatrolPoint,
@@ -67,6 +68,61 @@ describe("editor map mutations", () => {
       value: false,
     });
     expect(cleared.chunks[0].water[55][2]).toBe(false);
+  });
+
+  it("paints and erases surface materials", () => {
+    const map = loadPublishedMapAsset();
+    expect(map.chunks[0].surface).toBeUndefined();
+
+    // Paint cobblestone (2)
+    const painted = paintSurface(map, {
+      worldX: 5,
+      worldZ: 5,
+      radius: 0,
+      materialId: 2,
+    });
+    expect(painted.chunks[0].surface).toBeDefined();
+    expect(painted.chunks[0].surface![2][2]).toBe(2);
+
+    // Paint dirt (1) in adjacent cell
+    const withDirt = paintSurface(painted, {
+      worldX: 7,
+      worldZ: 5,
+      radius: 0,
+      materialId: 1,
+    });
+    expect(withDirt.chunks[0].surface![2][2]).toBe(2);
+    expect(withDirt.chunks[0].surface![2][3]).toBe(1);
+
+    // Erase back to meadow (0)
+    const erased = paintSurface(withDirt, {
+      worldX: 5,
+      worldZ: 5,
+      radius: 0,
+      materialId: 0,
+    });
+    expect(erased.chunks[0].surface![2][2]).toBe(0);
+    expect(erased.chunks[0].surface![2][3]).toBe(1);
+  });
+
+  it("paints surface across chunk boundaries", () => {
+    const map = addChunk(loadPublishedMapAsset(), 1, 0);
+    const painted = paintSurface(map, {
+      worldX: map.chunkSize,
+      worldZ: map.chunkSize / 2,
+      radius: 4,
+      materialId: 2,
+    });
+
+    const leftChunk = painted.chunks.find((chunk) => chunk.id === "0:0");
+    const rightChunk = painted.chunks.find((chunk) => chunk.id === "1:0");
+    expect(leftChunk?.surface).toBeDefined();
+    expect(rightChunk?.surface).toBeDefined();
+
+    // Check cells near boundary in both chunks are cobblestone
+    const row = Math.floor(painted.chunkResolution / 2);
+    expect(leftChunk!.surface![row][painted.chunkResolution - 1]).toBe(2);
+    expect(rightChunk!.surface![row][0]).toBe(2);
   });
 
   it("sculpts across chunk boundaries", () => {

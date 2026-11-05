@@ -8,7 +8,7 @@ import {
   getChunkSampleStep,
 } from "./map";
 
-type WorldBrushTarget = {
+export type WorldBrushTarget = {
   worldX: number;
   worldZ: number;
   radius: number;
@@ -43,7 +43,7 @@ function mapChunkCells(
     column: number,
     chunk: MapAsset["chunks"][number]
   ) => number | boolean,
-  key: "heights" | "water"
+  key: "heights" | "water" | "surface"
 ): MapAsset {
   const next = cloneMapAsset(map);
   for (const chunk of next.chunks) {
@@ -72,6 +72,12 @@ function mapChunkCells(
       resolution - 1
     );
 
+    if (key === "surface" && !chunk.surface) {
+      chunk.surface = Array.from({ length: resolution }, () =>
+        Array.from({ length: resolution }, () => 0)
+      );
+    }
+
     for (let row = minRow; row <= maxRow; row += 1) {
       for (let column = minColumn; column <= maxColumn; column += 1) {
         const sampleWorldX = chunkOriginX + (column + 0.5) * cellSize;
@@ -87,13 +93,20 @@ function mapChunkCells(
             column,
             chunk
           ) as number;
-        } else {
+        } else if (key === "water") {
           chunk.water[row][column] = update(
             chunk.water[row][column],
             row,
             column,
             chunk
           ) as boolean;
+        } else if (key === "surface") {
+          chunk.surface![row][column] = update(
+            chunk.surface![row][column],
+            row,
+            column,
+            chunk
+          ) as number;
         }
       }
     }
@@ -193,6 +206,41 @@ export function sculptTerrain(
 
 export function paintWater(map: MapAsset, target: WorldBrushTarget & { value: boolean }): MapAsset {
   return mapChunkCells(map, target, () => target.value, "water");
+}
+
+export function paintSurface(
+  map: MapAsset,
+  target: WorldBrushTarget & { materialId: number; opacity?: number; hardness?: number }
+): MapAsset {
+  const opacity = target.opacity ?? 1;
+  const hardness = target.hardness ?? 1;
+
+  return mapChunkCells(
+    map,
+    target,
+    (currentVal, row, column, chunk) => {
+      if (opacity < 1 || hardness < 1) {
+        const cellSize = getChunkCellSize(chunk);
+        const chunkOriginX = chunk.x * map.chunkSize;
+        const chunkOriginZ = chunk.z * map.chunkSize;
+        const sampleWorldX = chunkOriginX + (column + 0.5) * cellSize;
+        const sampleWorldZ = chunkOriginZ + (row + 0.5) * cellSize;
+        const dist = Math.hypot(sampleWorldX - target.worldX, sampleWorldZ - target.worldZ);
+        const norm = target.radius > 0 ? dist / target.radius : 0;
+        let factor = 1;
+        if (norm > hardness) {
+          factor = Math.max(0, (1 - norm) / Math.max(0.01, 1 - hardness));
+        }
+        const prob = factor * opacity;
+        if (prob >= 1 || Math.random() < prob) {
+          return target.materialId;
+        }
+        return currentVal;
+      }
+      return target.materialId;
+    },
+    "surface"
+  );
 }
 
 export function createNpcDefinition(

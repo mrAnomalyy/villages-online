@@ -10,8 +10,10 @@ import type {
   RealmJoinTicket,
 } from "@villages/shared";
 import { pool, ensureRealmRows } from "./db";
-import { registerOrResumeGuest, makeTicket } from "./auth";
+import { registerOrResumeGuest, makeTicket, hashToken } from "./auth";
 import { getRealmById, realms } from "./realms";
+import { createMapsRouter } from "./maps";
+import { createCharactersRouter } from "./characters";
 
 const port = Number(process.env.PORT ?? 4000);
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
@@ -24,6 +26,26 @@ const redis = new Redis(redisUrl, {
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// JSON syntax error handler to return JSON error responses instead of HTML
+app.use(
+  (err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (
+      err instanceof SyntaxError ||
+      (typeof err === "object" &&
+        err !== null &&
+        "status" in err &&
+        (err as { status: unknown }).status === 400)
+    ) {
+      res.status(400).json({ error: "Malformed or invalid JSON payload." });
+      return;
+    }
+    next(err);
+  }
+);
+
+app.use("/api/maps", createMapsRouter(pool));
+app.use("/api/characters", createCharactersRouter(pool));
 
 const authSchema = z.object({
   nickname: z.string().min(3),
@@ -109,11 +131,12 @@ app.get("/realms/:realmId/character", async (req, res) => {
     return;
   }
 
+  const tokenHash = hashToken(auth.token);
   const result = await pool.query(
-    `SELECT id, player_id, realm_id, nickname_snapshot, body_type, position_x, position_y, position_z
+    `SELECT id, name, appearance, last_position
      FROM characters
-     WHERE player_id = $1 AND realm_id = $2`,
-    [auth.playerId, realmId]
+     WHERE account_token_hash = $1`,
+    [tokenHash]
   );
 
   if (result.rowCount === 0) {
@@ -121,16 +144,24 @@ app.get("/realms/:realmId/character", async (req, res) => {
     return;
   }
 
+  const row = result.rows[0];
+  const appearance =
+    typeof row.appearance === "string" ? JSON.parse(row.appearance) : (row.appearance ?? {});
+  const lastPosition =
+    typeof row.last_position === "string"
+      ? JSON.parse(row.last_position)
+      : (row.last_position ?? { x: 8, y: 1, z: 8 });
+
   res.json({
-    id: result.rows[0].id,
-    playerId: result.rows[0].player_id,
-    realmId: result.rows[0].realm_id,
-    nickname: result.rows[0].nickname_snapshot,
-    bodyType: result.rows[0].body_type,
+    id: row.id,
+    playerId: auth.playerId,
+    realmId,
+    nickname: row.name,
+    bodyType: appearance.bodyType ?? "male",
     position: {
-      x: Number(result.rows[0].position_x),
-      y: Number(result.rows[0].position_y),
-      z: Number(result.rows[0].position_z),
+      x: Number(lastPosition.x ?? 8),
+      y: Number(lastPosition.y ?? 1),
+      z: Number(lastPosition.z ?? 8),
     },
   });
   return;
@@ -164,26 +195,45 @@ app.post("/realms/:realmId/characters", async (req, res) => {
     return;
   }
 
-  const created = await pool.query(
-    `INSERT INTO characters (
-       id, player_id, realm_id, nickname_snapshot, body_type, position_x, position_y, position_z
-     ) VALUES ($1, $2, $3, $4, $5, 8, 1, 8)
-     ON CONFLICT (player_id, realm_id) DO UPDATE
-     SET body_type = EXCLUDED.body_type
-     RETURNING id, player_id, realm_id, nickname_snapshot, body_type, position_x, position_y, position_z`,
-    [crypto.randomUUID(), auth.playerId, realmId, player.rows[0].nickname, parsed.data.bodyType]
+  const tokenHash = hashToken(auth.token);
+  const existing = await pool.query<{ id: string }>(
+    "SELECT id FROM characters WHERE account_token_hash = $1",
+    [tokenHash]
   );
 
+  let characterId = existing.rows[0]?.id;
+  if (!characterId) {
+    characterId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO characters (id, account_token_hash, name, appearance, last_position, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [
+        characterId,
+        tokenHash,
+        player.rows[0].nickname,
+        JSON.stringify({ bodyType: parsed.data.bodyType }),
+        JSON.stringify({ x: 8, y: 1, z: 8 }),
+      ]
+    );
+  } else {
+    await pool.query(
+      `UPDATE characters
+       SET appearance = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2 AND account_token_hash = $3`,
+      [JSON.stringify({ bodyType: parsed.data.bodyType }), characterId, tokenHash]
+    );
+  }
+
   res.status(201).json({
-    id: created.rows[0].id,
-    playerId: created.rows[0].player_id,
-    realmId: created.rows[0].realm_id,
-    nickname: created.rows[0].nickname_snapshot,
-    bodyType: created.rows[0].body_type,
+    id: characterId,
+    playerId: auth.playerId,
+    realmId,
+    nickname: player.rows[0].nickname,
+    bodyType: parsed.data.bodyType,
     position: {
-      x: Number(created.rows[0].position_x),
-      y: Number(created.rows[0].position_y),
-      z: Number(created.rows[0].position_z),
+      x: 8,
+      y: 1,
+      z: 8,
     },
   });
   return;
@@ -208,9 +258,10 @@ app.post("/realms/:realmId/join", async (req, res) => {
     return;
   }
 
+  const tokenHash = hashToken(auth.token);
   const character = await pool.query<{ id: string }>(
-    "SELECT id FROM characters WHERE player_id = $1 AND realm_id = $2",
-    [auth.playerId, realmId]
+    "SELECT id FROM characters WHERE account_token_hash = $1",
+    [tokenHash]
   );
   if (character.rowCount === 0) {
     res.status(400).json({ message: "Character not created yet." });
@@ -239,14 +290,18 @@ app.post("/realms/:realmId/join", async (req, res) => {
   return;
 });
 
-async function start(): Promise<void> {
+export async function start(): Promise<void> {
   await ensureRealmRows(realms);
   app.listen(port, () => {
     console.log(`[gateway] listening on ${port}`);
   });
 }
 
-start().catch((error) => {
-  console.error("[gateway] failed to boot", error);
-  process.exit(1);
-});
+if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+  start().catch((error) => {
+    console.error("[gateway] failed to boot", error);
+    process.exit(1);
+  });
+}
+
+export { app };

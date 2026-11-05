@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CharacterBodyType,
   CharacterSummary,
+  ClientChatMessage,
   GuestAuthResponse,
   InitialWorldPayload,
   RealmDescriptor,
+  ServerChatMessage,
   ServerSocketMessage,
 } from "@villages/shared";
 import { CHUNK_SIZE, type EntitySnapshot } from "@villages/shared";
@@ -18,6 +20,7 @@ import {
   requestJoinTicket,
 } from "../lib/api";
 import { BabylonGameCanvas } from "./scene-canvas";
+import { ChatBox } from "./chat-box";
 
 type Stage = "menu" | "character" | "loading" | "game";
 type Direction = { x: number; z: number };
@@ -66,6 +69,8 @@ export function GameShell() {
   const [world, setWorld] = useState<InitialWorldPayload | null>(null);
   const [entities, setEntities] = useState<EntitySnapshot[]>([]);
   const [loadedChunkIds, setLoadedChunkIds] = useState<string[]>([]);
+  const [chatMessages, setChatMessages] = useState<ServerChatMessage[]>([]);
+  const [latestChatMessage, setLatestChatMessage] = useState<ServerChatMessage | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [status, setStatus] = useState("Waiting for a traveler.");
   const [error, setError] = useState<string | null>(null);
@@ -244,7 +249,25 @@ export function GameShell() {
           return;
         }
 
+        if (message.type === "chatMessage") {
+          setChatMessages((current) => [...current, message]);
+          setLatestChatMessage(message);
+          return;
+        }
+
         if (message.type === "error") {
+          setChatMessages((current) => [
+            ...current,
+            {
+              type: "chatMessage",
+              id: `err-${Date.now()}-${Math.random()}`,
+              senderId: "system",
+              senderNickname: "System",
+              channel: "say",
+              text: message.message,
+              timestamp: Date.now(),
+            },
+          ]);
           reject(new Error(message.message));
         }
       });
@@ -293,6 +316,10 @@ export function GameShell() {
     window.__VILLAGES_TEST_CONTROLS__?.jump();
   }
 
+  function handleSendMessage(clientMessage: ClientChatMessage) {
+    socketRef.current?.send(JSON.stringify(clientMessage));
+  }
+
   if (stage === "loading") {
     return (
       <div className="loading-screen" data-testid="loading-screen">
@@ -334,8 +361,14 @@ export function GameShell() {
           <BabylonGameCanvas
             world={world}
             entities={entities}
+            latestChatMessage={latestChatMessage}
             onMove={handleMove}
             onJump={handleJump}
+          />
+          <ChatBox
+            messages={chatMessages}
+            onSendMessage={handleSendMessage}
+            currentNickname={character?.nickname ?? session.nickname}
           />
         </div>
       </div>

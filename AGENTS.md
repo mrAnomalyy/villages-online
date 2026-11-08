@@ -150,8 +150,10 @@ Commits follow a structured Conventional Commits format with a task identifier:
 
 $$\text{<type>}(\text{<scope>}): \text{<TASK-ID> } \text{<Commit Message>}$$
 
-- **Format**: `<type>(<scope>): TASK-0 Commit Message` or `<type>(<scope>): villages#1 Commit Message`
-  - Use the Kanzo task ID (e.g. `villages#1`) or assigned task/issue number (e.g. `TASK-12`); otherwise default to `TASK-0`.
+- **Format**: `<type>(<scope>): villages#1 Commit Message` or `<type>(<scope>): TASK-0 Commit Message`
+  - **Kanzo ID Requirement**: For all features (`feat`), bug fixes (`fix`), refactoring (`refactor`), and performance tasks (`perf`), agents **must always** use the associated Kanzo task ID (e.g. `villages#1`). Never use `TASK-0` for feature branches, feature commits, or pull requests.
+  - **No Unlinked Tasks**: If working on a feature or bug not yet on the Kanzo board, agents must create a task card on Kanzo first (`kanzo.create_task`) and use the assigned ID (`villages#<number>`).
+  - **Strict TASK-0 Policy**: `TASK-0` is strictly reserved for administrative repo maintenance, root documentation updates, or tooling chores (e.g. `docs(root): TASK-0 ...`, `chore(root): TASK-0 ...`).
   - The commit message should be in the imperative mood and capitalized (e.g. `Add ...`, `Fix ...`, `Update ...`).
 - **Types**:
   - `feat`: New user-facing or editor feature
@@ -235,7 +237,7 @@ Before finishing any task or opening a pull request:
 3. `yarn typecheck` passes (0 type errors).
 4. `yarn build` succeeds for all workspaces.
 5. All newly created or modified files adhere to Prettier formatting (`yarn format`).
-6. Commit messages follow the `<type>(<scope>): <TASK-ID> Message` convention (e.g. `feat(scope): villages#1 ...`).
+6. Commit messages and PR titles follow the `<type>(<scope>): <TASK-ID> Message` convention with a valid Kanzo task ID (e.g. `feat(scope): villages#1 ...`). `TASK-0` is strictly prohibited for feature PRs and bug fixes.
 7. The active Kanzo task card has been transitioned to `review` with a completion comment.
 8. The human developer has been notified in chat with the PR link and a concise progress summary.
 9. **Visual Verification Screenshots**: For any user-facing, client, or editor feature (`apps/web`, `apps/editor`), capture multiple Playwright screenshots demonstrating distinct states of the feature (e.g. idle/initial state, active/interaction state, and toggled/result state). Commit screenshots to `assets/screenshots/` and embed them in the PR description or initial comment for visual review.

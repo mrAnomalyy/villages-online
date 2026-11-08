@@ -19,6 +19,15 @@ import { EditorCanvas } from "./editor-canvas";
 
 type Mode = "chunk" | "terrain" | "water" | "npc";
 
+type CloudMapItem = {
+  id: string;
+  name: string;
+  owner_id: string | null;
+  chunk_count?: number;
+  chunkCount?: number;
+  updated_at: string | Date;
+};
+
 const DEFAULT_MAP_ID = "starter-valley";
 const CARDINAL_DIRECTIONS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
 
@@ -92,6 +101,11 @@ export function MapEditorShell() {
   const [controlsCollapsed, setControlsCollapsed] = useState(false);
   const [spacePressed, setSpacePressed] = useState(false);
   const [altPressed, setAltPressed] = useState(false);
+  const [mapsModalOpen, setMapsModalOpen] = useState(false);
+  const [cloudMaps, setCloudMaps] = useState<CloudMapItem[]>([]);
+  const [loadingMaps, setLoadingMaps] = useState(false);
+  const [mapsError, setMapsError] = useState<string | null>(null);
+  const [cloudSaving, setCloudSaving] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -320,6 +334,71 @@ export function MapEditorShell() {
     }
   };
 
+  const handleOpenMapsModal = async () => {
+    setMapsModalOpen(true);
+    setLoadingMaps(true);
+    setMapsError(null);
+    try {
+      const list = await readJson<CloudMapItem[]>("/api/maps");
+      setCloudMaps(list);
+    } catch (err) {
+      setMapsError(err instanceof Error ? err.message : "Failed to load cloud maps.");
+    } finally {
+      setLoadingMaps(false);
+    }
+  };
+
+  const handleRefreshMaps = async () => {
+    setLoadingMaps(true);
+    setMapsError(null);
+    try {
+      const list = await readJson<CloudMapItem[]>("/api/maps");
+      setCloudMaps(list);
+    } catch (err) {
+      setMapsError(err instanceof Error ? err.message : "Failed to load cloud maps.");
+    } finally {
+      setLoadingMaps(false);
+    }
+  };
+
+  const handleOpenMapAsset = async (mapId: string) => {
+    try {
+      setStatus(`Loading map ${mapId}...`);
+      const loaded = await readJson<MapAsset>(`/api/maps/${mapId}`);
+      setMap(loaded);
+      setSelectedChunkId(loaded.chunks[0]?.id ?? null);
+      setSelectedNpcId(loaded.npcs[0]?.id ?? null);
+      setDirty(false);
+      setStatus(`Loaded ${loaded.name} (${mapId}).`);
+      setMapsModalOpen(false);
+    } catch (err) {
+      setMapsError(err instanceof Error ? err.message : "Failed to open map.");
+    }
+  };
+
+  const handleSaveToCloud = async () => {
+    if (!map) {
+      return;
+    }
+    setCloudSaving(true);
+    setStatus("Saving map to cloud...");
+    try {
+      await readJson<{ success: boolean; mapId: string }>("/api/maps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ map }),
+      });
+      setDirty(false);
+      setStatus(`Saved ${map.name} to cloud.`);
+      const list = await readJson<CloudMapItem[]>("/api/maps");
+      setCloudMaps(list);
+    } catch (err) {
+      setMapsError(err instanceof Error ? err.message : "Cloud save failed.");
+    } finally {
+      setCloudSaving(false);
+    }
+  };
+
   if (!map) {
     return (
       <main className="editor-page">
@@ -338,6 +417,14 @@ export function MapEditorShell() {
               <strong>Villages Editor</strong>
             </div>
             <div className="toolbar-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                data-testid="cloud-maps-button"
+                onClick={() => void handleOpenMapsModal()}
+              >
+                Maps
+              </button>
               <button
                 className="secondary-button"
                 onClick={() => setControlsCollapsed((value) => !value)}
@@ -642,6 +729,94 @@ export function MapEditorShell() {
             patrol points.
           </span>
         </div>
+
+        {mapsModalOpen ? (
+          <div
+            className="modal-backdrop"
+            data-testid="cloud-maps-modal"
+            onClick={() => setMapsModalOpen(false)}
+          >
+            <div className="cloud-maps-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <div>
+                  <p className="eyebrow">World Persistence</p>
+                  <h2>Cloud Maps Browser</h2>
+                </div>
+                <button
+                  type="button"
+                  className="close-button"
+                  data-testid="close-maps-modal-button"
+                  onClick={() => setMapsModalOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-toolbar">
+                <button
+                  type="button"
+                  className="primary-button"
+                  data-testid="save-to-cloud-button"
+                  disabled={cloudSaving}
+                  onClick={() => void handleSaveToCloud()}
+                >
+                  {cloudSaving ? "Saving..." : "Save to Cloud"}
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void handleRefreshMaps()}
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <div className="modal-content-area">
+                {loadingMaps ? (
+                  <div className="modal-status">Fetching cloud maps...</div>
+                ) : mapsError ? (
+                  <div className="error-box">{mapsError}</div>
+                ) : cloudMaps.length === 0 ? (
+                  <div className="modal-status">No saved cloud maps found.</div>
+                ) : (
+                  <div className="map-card-grid">
+                    {cloudMaps.map((item) => {
+                      const chunkCount = item.chunkCount ?? item.chunk_count ?? 1;
+                      const dateStr = item.updated_at
+                        ? new Date(item.updated_at).toLocaleDateString()
+                        : "Recently";
+
+                      return (
+                        <div key={item.id} className="map-card" data-testid={`map-card-${item.id}`}>
+                          <div className="map-card-body">
+                            <strong>{item.name}</strong>
+                            <span className="map-card-id">{item.id}</span>
+                            <div className="map-card-meta">
+                              <span>
+                                {chunkCount} {chunkCount === 1 ? "chunk" : "chunks"}
+                              </span>
+                              <span>Modified: {dateStr}</span>
+                            </div>
+                          </div>
+                          <div className="map-card-actions">
+                            <button
+                              type="button"
+                              className="primary-button"
+                              data-testid={`open-map-${item.id}`}
+                              onClick={() => void handleOpenMapAsset(item.id)}
+                            >
+                              Open
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

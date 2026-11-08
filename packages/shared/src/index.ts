@@ -18,6 +18,23 @@ export type GuestAuthResponse = {
 
 export type CharacterBodyType = "male" | "female";
 
+export type CharacterAppearance = {
+  bodyType?: CharacterBodyType;
+  skinTone?: string;
+  armorTint?: string;
+  [key: string]: unknown;
+};
+
+export type CharacterProfile = {
+  id: string;
+  name: string;
+  appearance: CharacterAppearance;
+  last_position: Vector3Like | null;
+  lastPosition?: Vector3Like | null;
+  created_at: string | Date;
+  updated_at: string | Date;
+};
+
 export type CharacterSummary = {
   id: string;
   playerId: string;
@@ -29,6 +46,7 @@ export type CharacterSummary = {
 
 export type CreateCharacterRequest = {
   bodyType: CharacterBodyType;
+  characterId?: string;
 };
 
 export type RealmJoinTicket = {

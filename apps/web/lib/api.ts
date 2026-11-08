@@ -1,9 +1,12 @@
 import type {
+  CharacterAppearance,
   CharacterBodyType,
+  CharacterProfile,
   CharacterSummary,
   GuestAuthResponse,
   RealmDescriptor,
   RealmJoinTicket,
+  Vector3Like,
 } from "@villages/shared";
 
 const gatewayUrl = "/api/gateway";
@@ -64,7 +67,8 @@ export async function createCharacter(
   realmId: string,
   playerId: string,
   token: string,
-  bodyType: CharacterBodyType
+  bodyType: CharacterBodyType,
+  characterId?: string
 ): Promise<CharacterSummary> {
   const response = await fetch(`${gatewayUrl}/realms/${realmId}/characters`, {
     method: "POST",
@@ -73,7 +77,7 @@ export async function createCharacter(
       "x-player-id": playerId,
       "x-player-token": token,
     },
-    body: JSON.stringify({ bodyType }),
+    body: JSON.stringify({ bodyType, characterId }),
   });
 
   if (!response.ok) {
@@ -100,6 +104,49 @@ export async function requestJoinTicket(
   if (!response.ok) {
     const payload = (await response.json()) as { message?: string };
     throw new Error(payload.message ?? "Failed to join realm.");
+  }
+
+  return response.json();
+}
+
+export async function fetchMyCharacters(token: string): Promise<CharacterProfile[]> {
+  const response = await fetch(`${gatewayUrl}/api/characters/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Failed to fetch saved characters.");
+  }
+
+  return response.json();
+}
+
+export async function saveCharacterCustomization(
+  token: string,
+  payload: {
+    id?: string;
+    name?: string;
+    nickname?: string;
+    appearance: CharacterAppearance;
+    lastPosition?: Vector3Like | null;
+  }
+): Promise<{ success: boolean; characterId: string; character: CharacterProfile }> {
+  const response = await fetch(`${gatewayUrl}/api/characters`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? "Failed to save character customization.");
   }
 
   return response.json();
